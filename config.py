@@ -15,7 +15,7 @@ DEFAULT_CONFIG = {
     'learning_rate': 5.2e-05,
     'weight_decay': 1.98e-05,
     'batch_size': 128,
-    'epochs': 20,
+    'epochs': 10,
     'validation_split': 0.2,
     'early_stopping_patience': 3
 }

@@ -24,12 +24,7 @@ class HiddenPrints:
         sys.stdout.close()
         sys.stdout = self._original_stdout
 
-
-def precision_recall_at_k(y_preds: np.ndarray, 
-                         y_true: np.ndarray, 
-                         X_test_users: np.ndarray, 
-                         k: int = 5, 
-                         threshold: float = 0.6) -> Tuple[float, float]:
+def precision_recall_at_k(y_preds: np.ndarray, y_true: np.ndarray, X_test_users: np.ndarray, k: int = 5, threshold: float = 0.6) -> Tuple[float, float]:
     """Calculate Precision@K and Recall@K for recommendation system"""
     
     unique_users = np.unique(X_test_users, axis=0)
@@ -38,14 +33,16 @@ def precision_recall_at_k(y_preds: np.ndarray,
     
     for user in unique_users:
         user_indices = np.where((X_test_users == user).all(axis=1))[0]
-        
         if len(user_indices) == 0:
             continue
-            
+        
         user_preds = y_preds[user_indices]
         user_true = y_true[user_indices]
         
         actual_k = min(k, len(user_preds))
+        if actual_k == 0:  # Add this check
+            continue
+            
         top_k_indices = np.argsort(user_preds)[-actual_k:][::-1]
         top_k_true = user_true[top_k_indices]
         
@@ -58,8 +55,7 @@ def precision_recall_at_k(y_preds: np.ndarray,
         precisions.append(precision)
         recalls.append(recall)
     
-    return np.mean(precisions), np.mean(recalls)
-
+    return np.mean(precisions) if precisions else 0.0, np.mean(recalls) if recalls else 0.0
 
 def init_data(input_data: Tuple, y: np.ndarray = None, device: str = 'cpu') -> Tuple:
     """Initialize data tensors for model input"""

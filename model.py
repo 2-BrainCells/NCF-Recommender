@@ -108,6 +108,11 @@ class NeuralCollaborativeFiltering(nn.Module):
                 item_features: torch.Tensor,
                 user_embeddings: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
         
+        user_ids = user_ids.to(self.device)
+        item_ids = item_ids.to(self.device)
+        user_features = user_features.to(self.device)
+        item_features = item_features.to(self.device)
+        
         # Get embeddings
         if user_embeddings is not None:
             user_emb_mlp = user_embeddings[0].repeat(len(user_ids), 1)

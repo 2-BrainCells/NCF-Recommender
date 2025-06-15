@@ -9,20 +9,18 @@ import logging
 import torch
 import torch.optim as optim
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from config import DEFAULT_CONFIG, LOGGING_CONFIG, DEVICE
-from config import CATEGORY_MAPPING
+from config import DEFAULT_CONFIG, LOGGING_CONFIG, DEVICE, CATEGORY_MAPPING
 from data_processor import DataProcessor
 from model import NeuralCollaborativeFiltering, TrainingEarlyStopping
 from hpo import HyperparameterOptimizer
-from utils import train_model_epoch, evaluate_model, get_popular_items, get_item_category
-
+from utils import train_model_epoch, evaluate_model, get_popular_items
 
 class DyslexiaRecommendationSystem:
     """Main recommendation system class"""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  embedding_dims: int = None,
                  hidden_dims: List[int] = None,
                  dropout: float = None,
@@ -33,7 +31,6 @@ class DyslexiaRecommendationSystem:
         
         # Use default config if not provided
         config = DEFAULT_CONFIG.copy()
-        
         self.embedding_dims = embedding_dims or config['embedding_dims']
         self.hidden_dims = hidden_dims or config['hidden_dims']
         self.dropout = dropout or config['dropout']
@@ -41,16 +38,16 @@ class DyslexiaRecommendationSystem:
         self.weight_decay = weight_decay or config['weight_decay']
         self.batch_size = batch_size or config['batch_size']
         self.device = device or DEVICE
-        
+
         # Initialize components
         self.data_processor = DataProcessor()
         self.model = None
         self.hpo_optimizer = None
         self.best_params = None
-        
+
         # Setup logging
         self._setup_logging()
-        
+
     def _setup_logging(self):
         """Setup logging configuration"""
         logging.basicConfig(
@@ -67,55 +64,51 @@ class DyslexiaRecommendationSystem:
         """Load and preprocess all data"""
         try:
             self.logger.info("Loading data files...")
-            
             if not os.path.exists(demographic_file) or not os.path.exists(ratings_file):
                 raise FileNotFoundError("Required data files not found")
-            
+
             demographic_df = pd.read_csv(demographic_file)
             ratings_df = pd.read_csv(ratings_file)
-            
+
             # Process data using DataProcessor
-            (self.data_processor.user_data, 
-             self.data_processor.item_data, 
+            (self.data_processor.user_data,
+             self.data_processor.item_data,
              self.data_processor.ratings_data) = self.data_processor.preprocess_data(
                 demographic_df, ratings_df
             )
-            
+
             self.logger.info(f"Data loaded successfully: {len(self.data_processor.user_data)} users, "
                            f"{len(self.data_processor.item_data)} items, {len(self.data_processor.ratings_data)} ratings")
-            
+
         except Exception as e:
             self.logger.error(f"Error loading data: {str(e)}")
             raise
 
-    def run_hyperparameter_optimization(self, 
+    def run_hyperparameter_optimization(self,
                                        n_trials: int = 100,
                                        timeout: int = 3600,
                                        save_study: bool = True,
                                        study_name: str = 'dyslexia_ncf_optimization') -> Dict:
         """Run hyperparameter optimization"""
-        
         if self.data_processor.user_data is None:
             raise ValueError("Data must be loaded before running HPO")
-        
+
         self.hpo_optimizer = HyperparameterOptimizer(self.data_processor, self.device)
         study = self.hpo_optimizer.run_optimization(n_trials, timeout, save_study, study_name)
-        
         self.best_params = self.hpo_optimizer.get_best_config()
-        
+
         return {
             'best_value': study.best_value,
             'best_params': self.best_params,
             'n_trials': len(study.trials)
         }
 
-    def train_model(self, 
-                    epochs: int = None, 
-                    validation_split: float = None, 
-                    early_stopping_patience: int = None, 
+    def train_model(self,
+                    epochs: int = None,
+                    validation_split: float = None,
+                    early_stopping_patience: int = None,
                     use_best_params: bool = True) -> Dict:
         """Train the recommendation model"""
-
         if self.data_processor.user_data is None:
             raise ValueError("Data must be loaded before training")
 
@@ -169,12 +162,13 @@ class DyslexiaRecommendationSystem:
         # Setup training
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.Adam(
-            self.model.parameters(), 
-            lr=self.learning_rate, 
+            self.model.parameters(),
+            lr=self.learning_rate,
             weight_decay=self.weight_decay
         )
+
         early_stopping = TrainingEarlyStopping(
-            patience=early_stopping_patience, 
+            patience=early_stopping_patience,
             delta=0.0002
         )
 
@@ -194,27 +188,30 @@ class DyslexiaRecommendationSystem:
             'test_metrics': test_metrics
         }
 
-
     def get_recommendations(self, user_profile: Dict, top_k: int = 10) -> str:
         """Get recommendations for a user and return as JSON"""
-        
         try:
             self._validate_user_profile(user_profile)
-            
             if self.model is None:
                 raise ValueError("Model must be trained before generating recommendations")
-            
-            self.logger.info(f"Generating recommendations for user: {user_profile.get('id', 'new_user')}")
-            
-            # Check if user exists in system
+
             user_id = user_profile.get('id')
-            is_existing_user = user_id is not None and user_id < len(self.data_processor.user_data.drop_duplicates())
-            
+
+            # Check if user exists in the ratings data
+            is_existing_user = False
+            if user_id is not None:
+                user_exists_in_ratings = len(self.data_processor.ratings_data[
+                    self.data_processor.ratings_data['user_id'] == user_id
+                ]) > 0
+                is_existing_user = user_exists_in_ratings
+
+            self.logger.info(f"User {user_id} - Existing: {is_existing_user}")
+
             if is_existing_user:
                 recommendations = self._get_existing_user_recommendations(user_id, top_k)
             else:
                 recommendations = self._get_new_user_recommendations(user_profile, top_k)
-            
+
             # Format as JSON
             result = {
                 'user_id': user_id,
@@ -224,21 +221,27 @@ class DyslexiaRecommendationSystem:
                     'used_hpo': self.best_params is not None,
                     'best_params': self.best_params if self.best_params else 'default_params'
                 },
+                'debug_info': {
+                    'user_exists_in_ratings': is_existing_user,
+                    'total_users_in_system': self.data_processor.num_users,
+                    'user_rating_count': len(self.data_processor.ratings_data[
+                        self.data_processor.ratings_data['user_id'] == user_id
+                    ]) if user_id is not None else 0
+                },
                 'timestamp': datetime.now().isoformat()
             }
-            
+
             return json.dumps(result, indent=2)
-            
+
         except Exception as e:
             self.logger.error(f"Error generating recommendations: {str(e)}")
             return json.dumps({'error': str(e)})
 
     def _validate_user_profile(self, user_profile: Dict) -> None:
         """Validate user profile data"""
-        
         if not isinstance(user_profile, dict):
             raise ValueError("User profile must be a dictionary")
-        
+
         # For new users, validate required fields
         if 'preferences' in user_profile:
             valid_categories = set(self.data_processor.category_names)
@@ -248,45 +251,308 @@ class DyslexiaRecommendationSystem:
                 raise ValueError(f"Invalid preferences: {invalid_prefs}")
 
     def _get_existing_user_recommendations(self, user_id: int, top_k: int) -> List[Dict]:
-        """Get recommendations for existing user"""
-        
-        # Get user's interaction history
-        user_ratings = self.data_processor.ratings_data[self.data_processor.ratings_data['user_id'] == user_id]
-        interacted_items = set(user_ratings['item_id'].values)
-        
-        # Get all items user hasn't interacted with
-        all_items = set(range(len(self.data_processor.item_data.drop_duplicates())))
-        candidate_items = list(all_items - interacted_items)
-        
-        if len(candidate_items) == 0:
-            return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
-        
-        # Simple prediction for candidate items (would need more implementation)
-        # For now, return popular items
-        return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
+        """Get personalized recommendations based on user's high-rated items"""
+        try:
+            # Get user's interaction history
+            user_ratings = self.data_processor.ratings_data[
+                self.data_processor.ratings_data['user_id'] == user_id
+            ]
+
+            if len(user_ratings) == 0:
+                return [{'error': f'User {user_id} not found in the system'}]
+
+            # Get user's HIGH-RATED items (above their personal average)
+            user_avg_rating = user_ratings['rating'].mean()
+            high_rated_threshold = max(user_avg_rating, 0.6)  # At least 3/5 stars
+
+            high_rated_items = user_ratings[user_ratings['rating'] >= high_rated_threshold]
+
+            self.logger.info(f"User {user_id}: {len(high_rated_items)} high-rated items out of {len(user_ratings)} total")
+
+            # Get items user hasn't interacted with
+            interacted_items = set(user_ratings['item_id'].values)
+            all_items = set(range(self.data_processor.num_items))
+            candidate_items = list(all_items - interacted_items)
+
+            if len(candidate_items) == 0:
+                return [{'info': 'User has interacted with all available items'}]
+
+            # Strategy 1: Category-based recommendations from high-rated items
+            category_recommendations = self._get_category_based_recommendations(
+                high_rated_items, candidate_items, user_id
+            )
+
+            # Strategy 2: Collaborative filtering from similar users
+            collaborative_recommendations = self._get_collaborative_recommendations_from_high_rated(
+                high_rated_items, candidate_items, user_id
+            )
+
+            # Combine recommendations with weights
+            combined_recommendations = self._combine_personalized_recommendations(
+                category_recommendations, collaborative_recommendations
+            )
+
+            # If we have enough personalized recommendations, return them
+            if len(combined_recommendations) >= top_k:
+                return combined_recommendations[:top_k]
+
+            # If not enough personalized recommendations, fill with popular items
+            popular_items = get_popular_items(
+                self.data_processor.ratings_data,
+                top_k - len(combined_recommendations),
+                self.data_processor.item_id_to_code
+            )
+
+            # Mark popular items as fallback
+            for item in popular_items:
+                item['recommendation_type'] = 'popular_fallback'
+                item['reason'] = 'Insufficient personalized recommendations'
+
+            # Mark personalized items
+            for item in combined_recommendations:
+                item['recommendation_type'] = 'personalized'
+
+            final_recommendations = combined_recommendations + popular_items
+
+            # Add user insight
+            if len(combined_recommendations) < top_k * 0.7:  # Less than 70% personalized
+                insight = {
+                    'item_code': 'USER_INSIGHT',
+                    'predicted_rating': 0,
+                    'category': 'System Message',
+                    'recommendation_type': 'insight',
+                    'message': f'Based on your {len(high_rated_items)} high-rated items. Consider rating more items for better personalization.'
+                }
+                final_recommendations.insert(0, insight)
+
+            return final_recommendations[:top_k + 1]  # +1 for potential insight message
+
+        except Exception as e:
+            self.logger.error(f"Error generating recommendations for user {user_id}: {str(e)}")
+            return [{'error': f'Error generating recommendations: {str(e)}'}]
+
+    def _get_category_based_recommendations(self, high_rated_items: pd.DataFrame, candidate_items: List[int], user_id: int) -> List[Dict]:
+        """Get recommendations based on categories of user's high-rated items"""
+
+        # Analyze user's preferred categories from high-rated items
+        category_preferences = {}
+        category_item_counts = {}
+
+        for _, rating_row in high_rated_items.iterrows():
+            item_id = rating_row['item_id']
+            rating = rating_row['rating'] * 5  # Convert to 1-5 scale
+
+            item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
+            category = CATEGORY_MAPPING.get(item_code, 'Other')
+
+            if category not in category_preferences:
+                category_preferences[category] = []
+                category_item_counts[category] = 0
+
+            category_preferences[category].append(rating)
+            category_item_counts[category] += 1
+
+        # Calculate weighted category scores
+        category_scores = {}
+        for category, ratings in category_preferences.items():
+            avg_rating = sum(ratings) / len(ratings)
+            item_count = category_item_counts[category]
+
+            # Weight by both average rating and interaction frequency
+            category_scores[category] = avg_rating * (1 + 0.1 * item_count)  # Bonus for more interactions
+
+        # Sort categories by preference
+        sorted_categories = sorted(category_scores.items(), key=lambda x: x[1], reverse=True)
+
+        self.logger.info(f"User {user_id} preferred categories: {sorted_categories[:5]}")
+
+        # Find candidate items in preferred categories
+        recommendations = []
+
+        for category, score in sorted_categories:
+            # Find candidate items in this category
+            category_candidates = []
+
+            for item_id in candidate_items:
+                item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
+                item_category = CATEGORY_MAPPING.get(item_code, 'Other')
+
+                if item_category == category:
+                    category_candidates.append(item_id)
+
+            # Get average rating for items in this category (from all users)
+            category_items_all = []
+            for item_id, item_code in self.data_processor.item_id_to_code.items():
+                if CATEGORY_MAPPING.get(item_code, 'Other') == category:
+                    category_items_all.append(item_id)
+
+            if category_items_all:
+                category_ratings = self.data_processor.ratings_data[
+                    self.data_processor.ratings_data['item_id'].isin(category_items_all)
+                ]
+                avg_category_rating = category_ratings['rating'].mean() * 5 if len(category_ratings) > 0 else 3.5
+            else:
+                avg_category_rating = 3.5
+
+            # Add recommendations from this category
+            for item_id in category_candidates[:5]:  # Limit per category
+                item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
+
+                # Predicted rating based on user's preference for this category
+                predicted_rating = min(score * 0.8, 5.0)  # Scale down slightly and cap at 5
+
+                recommendations.append({
+                    'item_id': item_id,
+                    'item_code': item_code,
+                    'predicted_rating': round(predicted_rating, 2),
+                    'category': category,
+                    'source': 'category_preference',
+                    'user_category_score': round(score, 2)
+                })
+
+        # Sort by predicted rating
+        return sorted(recommendations, key=lambda x: x['predicted_rating'], reverse=True)
+
+    def _get_collaborative_recommendations_from_high_rated(self, high_rated_items: pd.DataFrame, candidate_items: List[int], user_id: int) -> List[Dict]:
+        """Find users with similar high-rated items and recommend what they liked"""
+
+        if len(high_rated_items) < 2:  # Need at least 2 high-rated items for similarity
+            return []
+
+        # Get items that this user rated highly
+        user_high_rated_item_ids = set(high_rated_items['item_id'].values)
+
+        # Find other users who also rated these items highly
+        similar_users_scores = {}
+
+        for item_id in user_high_rated_item_ids:
+            # Find other users who rated this item highly (>= 0.6 normalized, which is 3/5)
+            item_ratings = self.data_processor.ratings_data[
+                (self.data_processor.ratings_data['item_id'] == item_id) &
+                (self.data_processor.ratings_data['rating'] >= 0.6) &
+                (self.data_processor.ratings_data['user_id'] != user_id)
+            ]
+
+            for _, rating_row in item_ratings.iterrows():
+                other_user_id = rating_row['user_id']
+                rating = rating_row['rating']
+
+                if other_user_id not in similar_users_scores:
+                    similar_users_scores[other_user_id] = 0
+
+                # Add similarity score based on rating
+                similar_users_scores[other_user_id] += rating
+
+        # Get top similar users
+        top_similar_users = sorted(similar_users_scores.items(), key=lambda x: x[1], reverse=True)[:10]
+
+        if not top_similar_users:
+            return []
+
+        self.logger.info(f"User {user_id}: Found {len(top_similar_users)} similar users")
+
+        # Get recommendations from similar users
+        collaborative_scores = {}
+
+        for similar_user_id, similarity_score in top_similar_users:
+            # Get this similar user's high-rated items
+            similar_user_ratings = self.data_processor.ratings_data[
+                (self.data_processor.ratings_data['user_id'] == similar_user_id) &
+                (self.data_processor.ratings_data['rating'] >= 0.6)  # Their high-rated items
+            ]
+
+            for _, rating_row in similar_user_ratings.iterrows():
+                item_id = rating_row['item_id']
+                rating = rating_row['rating'] * 5  # Convert to 1-5 scale
+
+                # Only consider items that our user hasn't interacted with
+                if item_id in candidate_items:
+                    if item_id not in collaborative_scores:
+                        collaborative_scores[item_id] = 0
+
+                    # Weight by similarity and rating
+                    weighted_score = (similarity_score / len(top_similar_users)) * rating
+                    collaborative_scores[item_id] += weighted_score
+
+        # Create recommendations
+        recommendations = []
+        for item_id, score in collaborative_scores.items():
+            item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
+            category = CATEGORY_MAPPING.get(item_code, 'Other')
+
+            # Normalize score to 1-5 range
+            predicted_rating = min(score / 2, 5.0)  # Adjust scaling as needed
+
+            recommendations.append({
+                'item_id': item_id,
+                'item_code': item_code,
+                'predicted_rating': round(predicted_rating, 2),
+                'category': category,
+                'source': 'collaborative_filtering',
+                'similarity_score': round(score, 2)
+            })
+
+        return sorted(recommendations, key=lambda x: x['predicted_rating'], reverse=True)
+
+    def _combine_personalized_recommendations(self, category_recs: List[Dict], collaborative_recs: List[Dict]) -> List[Dict]:
+        """Combine category-based and collaborative recommendations"""
+
+        # Create a unified scoring system
+        combined_scores = {}
+
+        # Weight the different recommendation sources
+        category_weight = 0.6  # Higher weight for category preferences
+        collaborative_weight = 0.4
+
+        # Add category-based scores
+        for rec in category_recs:
+            item_id = rec['item_id']
+            if item_id not in combined_scores:
+                combined_scores[item_id] = {**rec, 'combined_score': 0, 'sources': []}
+
+            combined_scores[item_id]['combined_score'] += category_weight * rec['predicted_rating']
+            combined_scores[item_id]['sources'].append('category')
+
+        # Add collaborative scores
+        for rec in collaborative_recs:
+            item_id = rec['item_id']
+            if item_id not in combined_scores:
+                combined_scores[item_id] = {**rec, 'combined_score': 0, 'sources': []}
+
+            combined_scores[item_id]['combined_score'] += collaborative_weight * rec['predicted_rating']
+            combined_scores[item_id]['sources'].append('collaborative')
+
+        # Convert back to list and sort
+        final_recommendations = []
+        for item_id, rec_data in combined_scores.items():
+            rec_data['predicted_rating'] = round(rec_data['combined_score'], 2)
+            rec_data['recommendation_sources'] = ', '.join(rec_data['sources'])
+            del rec_data['combined_score']
+            del rec_data['sources']
+            final_recommendations.append(rec_data)
+
+        return sorted(final_recommendations, key=lambda x: x['predicted_rating'], reverse=True)
 
     def _get_new_user_recommendations(self, user_profile: Dict, top_k: int) -> List[Dict]:
         """Get recommendations for new user"""
-        
         # If user has preferences, use them
         if 'preferences' in user_profile and user_profile['preferences']:
             return self._get_preference_based_recommendations(user_profile, top_k)
-        
+
         # Otherwise, recommend popular items
         return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
-    
+
     def _get_preference_based_recommendations(self, user_profile: Dict, top_k: int) -> List[Dict]:
         """Get recommendations based on user preferences"""
-        
         user_preferences = user_profile['preferences']
-        
+
         # Find items in preferred categories
         preferred_items = []
-        
+
         # Create a temporary item data with categories if not exists
         if not hasattr(self.data_processor, 'item_data_with_categories'):
             self._create_item_category_mapping()
-        
+
         for category in user_preferences:
             if category in self.data_processor.category_names:
                 # Find items that belong to this category
@@ -294,52 +560,122 @@ class DyslexiaRecommendationSystem:
                 for item_id, item_code in self.data_processor.item_id_to_code.items():
                     if item_code in CATEGORY_MAPPING and CATEGORY_MAPPING[item_code] == category:
                         category_items.append(item_id)
+
                 preferred_items.extend(category_items)
-        
+
         # Remove duplicates
         preferred_items = list(set(preferred_items))
-        
+
         if len(preferred_items) == 0:
             return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
-        
+
         # For preference-based recommendations, use the category average ratings
         recommendations = []
         category_avg_ratings = self._get_category_average_ratings()
-        
+
         for item_id in preferred_items:
             item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
             category = CATEGORY_MAPPING.get(item_code, 'Other')
-            
+
             # Get average rating for this category, default to 4.0
             avg_rating = category_avg_ratings.get(category, 4.0)
-            
+
             recommendations.append({
                 'item_id': item_id,
                 'item_code': item_code,
                 'predicted_rating': round(avg_rating, 2),
                 'category': category
             })
-        
+
         # Sort by predicted rating
         sorted_recommendations = sorted(recommendations, key=lambda x: x['predicted_rating'], reverse=True)
-        
+
         # If we don't have enough recommendations, fill with popular items
         if len(sorted_recommendations) < top_k:
             popular_items = get_popular_items(
-                self.data_processor.ratings_data, 
-                top_k - len(sorted_recommendations), 
+                self.data_processor.ratings_data,
+                top_k - len(sorted_recommendations),
                 self.data_processor.item_id_to_code
             )
             sorted_recommendations.extend(popular_items)
-        
+
         return sorted_recommendations[:top_k]
+
+    def get_user_information(self, user_id: int) -> Dict:
+        """Get detailed information about an existing user"""
+        try:
+            # Check if user exists
+            user_ratings = self.data_processor.ratings_data[
+                self.data_processor.ratings_data['user_id'] == user_id
+            ]
+
+            if len(user_ratings) == 0:
+                return {'error': f'User {user_id} not found in the system'}
+
+            # Get user's rating statistics
+            user_stats = {
+                'total_ratings': len(user_ratings),
+                'average_rating': round(user_ratings['rating'].mean() * 5, 2),
+                'min_rating': round(user_ratings['rating'].min() * 5, 2),
+                'max_rating': round(user_ratings['rating'].max() * 5, 2)
+            }
+
+            # Get user's top rated items (above 3.5/5.0)
+            high_rated = user_ratings[user_ratings['rating'] > 0.7]  # 3.5/5.0 in normalized scale
+            top_items = []
+
+            for _, row in high_rated.nlargest(10, 'rating').iterrows():
+                item_code = self.data_processor.item_id_to_code.get(row['item_id'], f"ITEM_{row['item_id']}")
+                category = CATEGORY_MAPPING.get(item_code, 'Other')
+                top_items.append({
+                    'item_code': item_code,
+                    'category': category,
+                    'rating': round(row['rating'] * 5, 2)
+                })
+
+            # Get user's category preferences
+            category_preferences = {}
+            for category in set(CATEGORY_MAPPING.values()):
+                # Find items in this category that user has rated
+                category_items = []
+                for item_id, item_code in self.data_processor.item_id_to_code.items():
+                    if CATEGORY_MAPPING.get(item_code, 'Other') == category:
+                        category_items.append(item_id)
+
+                if category_items:
+                    category_ratings = user_ratings[user_ratings['item_id'].isin(category_items)]
+                    if len(category_ratings) > 0:
+                        avg_rating = round(category_ratings['rating'].mean() * 5, 2)
+                        category_preferences[category] = {
+                            'average_rating': avg_rating,
+                            'items_rated': len(category_ratings)
+                        }
+
+            # Sort categories by preference
+            sorted_categories = sorted(
+                category_preferences.items(),
+                key=lambda x: x[1]['average_rating'],
+                reverse=True
+            )
+
+            return {
+                'user_id': user_id,
+                'statistics': user_stats,
+                'highly_rated_items': top_items,
+                'category_preferences': dict(sorted_categories[:10]),  # Top 10 categories
+                'total_categories_rated': len(category_preferences),
+                'preference_quality': 'high' if user_stats['average_rating'] >= 3.5 else 'moderate' if user_stats['average_rating'] >= 2.5 else 'low'
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error getting user information for {user_id}: {str(e)}")
+            return {'error': str(e)}
 
     def save_model(self, filepath: str) -> None:
         """Save the trained model and system state"""
-        
         if self.model is None:
             raise ValueError("No trained model to save")
-        
+
         model_state = {
             'model_state_dict': self.model.state_dict(),
             'model_config': {
@@ -357,25 +693,31 @@ class DyslexiaRecommendationSystem:
                 'diagnosis_categories': self.data_processor.diagnosis_categories,
                 'other_categories': self.data_processor.other_categories,
                 'answer_categories': self.data_processor.answer_categories,
-                'family_categories': self.data_processor.family_categories
+                'family_categories': self.data_processor.family_categories,
+                'num_users': self.data_processor.num_users,
+                'num_items': self.data_processor.num_items
+            },
+            'preprocessed_data': {
+                'user_data': self.data_processor.user_data,
+                'item_data': self.data_processor.item_data,
+                'ratings_data': self.data_processor.ratings_data
             },
             'hpo_results': {
                 'best_params': self.best_params,
                 'study_completed': self.hpo_optimizer is not None
             }
         }
-        
+
         torch.save(model_state, filepath)
-        self.logger.info(f"Model saved to {filepath}")
+        self.logger.info(f"Model and data saved to {filepath}")
 
     def load_model(self, filepath: str) -> None:
         """Load a saved model and system state"""
-        
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Model file not found: {filepath}")
-        
+
         model_state = torch.load(filepath, map_location=self.device)
-        
+
         # Restore system state
         system_state = model_state['system_state']
         self.data_processor.item_id_to_code = system_state['item_id_to_code']
@@ -384,11 +726,23 @@ class DyslexiaRecommendationSystem:
         self.data_processor.other_categories = system_state['other_categories']
         self.data_processor.answer_categories = system_state['answer_categories']
         self.data_processor.family_categories = system_state['family_categories']
-        
+        self.data_processor.num_users = system_state['num_users']
+        self.data_processor.num_items = system_state['num_items']
+
+        # Restore preprocessed data
+        if 'preprocessed_data' in model_state:
+            preprocessed_data = model_state['preprocessed_data']
+            self.data_processor.user_data = preprocessed_data['user_data']
+            self.data_processor.item_data = preprocessed_data['item_data']
+            self.data_processor.ratings_data = preprocessed_data['ratings_data']
+            self.logger.info("Preprocessed data restored successfully")
+        else:
+            self.logger.warning("No preprocessed data found in saved model")
+
         # Restore HPO results if available
         if 'hpo_results' in model_state:
             self.best_params = model_state['hpo_results']['best_params']
-        
+
         # Recreate and load model
         config = model_state['model_config']
         self.model = NeuralCollaborativeFiltering(
@@ -401,12 +755,11 @@ class DyslexiaRecommendationSystem:
             dropout=config['dropout'],
             device=self.device
         )
-        
+
         self.model.load_state_dict(model_state['model_state_dict'])
         self.model.eval()
-        
         self.logger.info(f"Model loaded from {filepath}")
-        
+
     def _create_item_category_mapping(self):
         """Create mapping between items and categories"""
         self.data_processor.item_data_with_categories = {}
@@ -415,24 +768,24 @@ class DyslexiaRecommendationSystem:
             if category not in self.data_processor.item_data_with_categories:
                 self.data_processor.item_data_with_categories[category] = []
             self.data_processor.item_data_with_categories[category].append(item_id)
-            
+
     def _get_category_average_ratings(self) -> Dict[str, float]:
         """Get average ratings per category"""
         category_ratings = {}
-        
+
         for category in self.data_processor.category_names:
             # Find items in this category
             category_items = []
             for item_id, item_code in self.data_processor.item_id_to_code.items():
                 if CATEGORY_MAPPING.get(item_code, 'Other') == category:
                     category_items.append(item_id)
-            
+
             if category_items:
                 # Get ratings for items in this category
                 category_item_ratings = self.data_processor.ratings_data[
                     self.data_processor.ratings_data['item_id'].isin(category_items)
                 ]['rating']
-                
+
                 if len(category_item_ratings) > 0:
                     # Convert back to 1-5 scale and get average
                     avg_rating = category_item_ratings.mean() * 5
@@ -441,84 +794,5 @@ class DyslexiaRecommendationSystem:
                     category_ratings[category] = 4.0  # Default rating
             else:
                 category_ratings[category] = 4.0  # Default rating
-        
+                
         return category_ratings
-
-    def _get_existing_user_recommendations(self, user_id: int, top_k: int) -> List[Dict]:
-        """Get recommendations for existing user"""
-        
-        # Get user's interaction history
-        user_ratings = self.data_processor.ratings_data[self.data_processor.ratings_data['user_id'] == user_id]
-        interacted_items = set(user_ratings['item_id'].values)
-        
-        # Get all items user hasn't interacted with
-        all_items = set(range(self.data_processor.num_items))
-        candidate_items = list(all_items - interacted_items)
-        
-        if len(candidate_items) == 0:
-            return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
-        
-        # For existing users, we can use the model to predict ratings
-        if len(candidate_items) > 0:
-            recommendations = self._predict_ratings_for_user(user_id, candidate_items, top_k)
-            return recommendations
-        
-        # Fallback to popular items
-        return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
-
-    def _predict_ratings_for_user(self, user_id: int, candidate_items: List[int], top_k: int) -> List[Dict]:
-        """Predict ratings for candidate items for an existing user"""
-        
-        # Get user features
-        user_data_sample = self.data_processor.user_data.iloc[0:1]  # Get structure
-        user_features = torch.FloatTensor(user_data_sample.values).to(self.device)
-        
-        predictions = []
-        
-        for item_id in candidate_items[:min(100, len(candidate_items))]:  # Limit to prevent memory issues
-            # Get item features
-            item_data_sample = self.data_processor.item_data.iloc[0:1]  # Get structure
-            item_features = torch.FloatTensor(item_data_sample.values).to(self.device)
-            
-            # Create tensors for prediction
-            user_id_tensor = torch.IntTensor([user_id]).to(self.device)
-            item_id_tensor = torch.IntTensor([item_id]).to(self.device)
-            
-            # Predict rating
-            self.model.eval()
-            with torch.no_grad():
-                try:
-                    predicted_rating = self.model(user_id_tensor, item_id_tensor, user_features, item_features)
-                    predicted_rating = predicted_rating.cpu().numpy()[0] * 5  # Convert to 1-5 scale
-                    
-                    item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
-                    category = CATEGORY_MAPPING.get(item_code, 'Other')
-                    
-                    predictions.append({
-                        'item_id': item_id,
-                        'item_code': item_code,
-                        'predicted_rating': round(predicted_rating, 2),
-                        'category': category
-                    })
-                except Exception as e:
-                    # Skip items that cause errors
-                    continue
-        
-        # Sort by predicted rating
-        sorted_predictions = sorted(predictions, key=lambda x: x['predicted_rating'], reverse=True)
-        
-        # If we don't have enough predictions, fill with popular items
-        if len(sorted_predictions) < top_k:
-            popular_items = get_popular_items(
-                self.data_processor.ratings_data, 
-                top_k - len(sorted_predictions), 
-                self.data_processor.item_id_to_code
-            )
-            sorted_predictions.extend(popular_items)
-        
-        return sorted_predictions[:top_k]
-    
-    def get_item_category(item_id: int, item_data: pd.DataFrame, category_names: List[str], item_id_to_code: Dict) -> str:
-        """Get category for an item"""
-        item_code = item_id_to_code.get(item_id, f'ITEM_{item_id}')
-        return CATEGORY_MAPPING.get(item_code, 'Other')
