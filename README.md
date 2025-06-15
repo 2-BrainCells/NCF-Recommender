@@ -47,6 +47,7 @@ matplotlib>=3.5.0
 
 ### 1. Clone the Repository
 git clone git@github.com:2-BrainCells/NCF-Recommender.git
+
 cd dyslexia-recommendation-system
 
 ### 2. Create Virtual Environment
