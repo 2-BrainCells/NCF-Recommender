@@ -9,7 +9,6 @@ import torch
 import time
 warnings.filterwarnings('ignore')
 
-# Import your system components
 from recommendation_system import DyslexiaRecommendationSystem
 from config import CATEGORY_MAPPING, DEFAULT_CONFIG
 
@@ -19,7 +18,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS for better styling
 st.markdown("""
 <style>
     .main-header {
@@ -60,7 +58,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
 if 'rec_system' not in st.session_state:
     st.session_state.rec_system = None
 if 'data_loaded' not in st.session_state:
@@ -69,20 +66,17 @@ if 'model_trained' not in st.session_state:
     st.session_state.model_trained = False
 
 def initialize_system():
-    """Initialize the recommendation system"""
+    """Initialize the dyslexia recommendation system instance and manage session state for persistent system access across Streamlit reruns."""
     if st.session_state.rec_system is None:
         st.session_state.rec_system = DyslexiaRecommendationSystem()
     return st.session_state.rec_system
 
 def train_model_with_real_progress(rec_system, epochs=20):
-    """Train model with actual real-time progress updates"""
-    
-    # Setup progress display
+    """Execute model training with real-time progress visualization and comprehensive metrics display in Streamlit interface."""
     st.subheader("🎯 Training Progress")
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    # Metrics display
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         loss_metric = st.empty()
@@ -93,13 +87,11 @@ def train_model_with_real_progress(rec_system, epochs=20):
     with col4:
         time_metric = st.empty()
     
-    # Training details container
     details_container = st.expander("📊 Training Details", expanded=False)
     
     try:
         start_time = time.time()
         
-        # Update config to use optimized parameters
         rec_system.embedding_dims = DEFAULT_CONFIG['embedding_dims']
         rec_system.hidden_dims = DEFAULT_CONFIG['hidden_dims']
         rec_system.dropout = DEFAULT_CONFIG['dropout']
@@ -107,7 +99,6 @@ def train_model_with_real_progress(rec_system, epochs=20):
         rec_system.weight_decay = DEFAULT_CONFIG['weight_decay']
         rec_system.batch_size = DEFAULT_CONFIG['batch_size']
         
-        # Prepare data
         status_text.text("🔧 Preparing data...")
         progress_bar.progress(0.05)
         
@@ -118,7 +109,6 @@ def train_model_with_real_progress(rec_system, epochs=20):
             0.2
         )
         
-        # Initialize model
         status_text.text("🔧 Initializing model...")
         progress_bar.progress(0.1)
         
@@ -142,7 +132,6 @@ def train_model_with_real_progress(rec_system, epochs=20):
         
         rec_system.model.to(rec_system.device)
         
-        # Setup training
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.Adam(
             rec_system.model.parameters(),
@@ -152,7 +141,6 @@ def train_model_with_real_progress(rec_system, epochs=20):
         
         early_stopping = TrainingEarlyStopping(patience=3, delta=0.0002)
         
-        # Create data loaders
         from torch.utils.data import DataLoader, TensorDataset
         
         X_user_train, X_item_train, y_train = train_data
@@ -177,19 +165,16 @@ def train_model_with_real_progress(rec_system, epochs=20):
         train_loader = DataLoader(train_dataset, batch_size=rec_system.batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=rec_system.batch_size, shuffle=False)
         
-        # Training loop with REAL progress updates
         history = {'loss': [], 'val_loss': []}
         
         status_text.text("🚀 Starting training...")
         progress_bar.progress(0.15)
         
         for epoch in range(epochs):
-            # Calculate progress (15% to 90% for training epochs)
             epoch_progress = 0.15 + (epoch / epochs) * 0.75
             progress_bar.progress(epoch_progress)
             status_text.text(f"Training Epoch {epoch + 1}/{epochs}")
             
-            # Training phase
             rec_system.model.train()
             total_train_loss = 0.0
             batch_count = 0
@@ -210,7 +195,6 @@ def train_model_with_real_progress(rec_system, epochs=20):
                 total_train_loss += loss.item()
                 batch_count += 1
                 
-                # Update progress within epoch (micro-updates)
                 batch_progress = (batch_idx + 1) / len(train_loader)
                 current_epoch_progress = epoch + batch_progress
                 overall_progress = 0.15 + (current_epoch_progress / epochs) * 0.75
@@ -219,7 +203,6 @@ def train_model_with_real_progress(rec_system, epochs=20):
             avg_train_loss = total_train_loss / batch_count
             history['loss'].append(avg_train_loss)
             
-            # Validation phase
             rec_system.model.eval()
             total_val_loss = 0.0
             val_batch_count = 0
@@ -240,7 +223,6 @@ def train_model_with_real_progress(rec_system, epochs=20):
             avg_val_loss = total_val_loss / val_batch_count
             history['val_loss'].append(avg_val_loss)
             
-            # Update metrics display in real-time
             loss_metric.metric("Training Loss", f"{avg_train_loss:.4f}")
             val_metric.metric("Validation Loss", f"{avg_val_loss:.4f}")
             epoch_metric.metric("Epoch", f"{epoch + 1}/{epochs}")
@@ -248,27 +230,22 @@ def train_model_with_real_progress(rec_system, epochs=20):
             elapsed_time = time.time() - start_time
             time_metric.metric("Elapsed Time", f"{elapsed_time:.0f}s")
             
-            # Update details in real-time
             with details_container:
                 st.text(f"Epoch {epoch + 1}: Train Loss = {avg_train_loss:.4f}, Val Loss = {avg_val_loss:.4f}")
             
-            # Check early stopping
             early_stopping(avg_val_loss, rec_system.model)
             if early_stopping.early_stop:
                 st.info(f"Early stopping triggered at epoch {epoch + 1}")
                 break
             
-            # Small delay to see progress
             time.sleep(0.1)
         
-        # Final evaluation
         status_text.text("📊 Evaluating model...")
         progress_bar.progress(0.95)
         
         from utils import evaluate_model
         test_metrics = evaluate_model(rec_system.model, test_data, rec_system.batch_size, criterion, rec_system.device)
         
-        # Complete progress
         progress_bar.progress(1.0)
         status_text.text("✅ Training Completed Successfully!")
         
@@ -284,7 +261,7 @@ def train_model_with_real_progress(rec_system, epochs=20):
         return None
 
 def get_user_info(rec_system, user_id):
-    """Get detailed user information"""
+    """Retrieve comprehensive user analytics including rating patterns, preferences, and behavioral insights for profile analysis."""
     try:
         user_ratings = rec_system.data_processor.ratings_data[
             rec_system.data_processor.ratings_data['user_id'] == user_id
@@ -293,7 +270,6 @@ def get_user_info(rec_system, user_id):
         if len(user_ratings) == 0:
             return None
         
-        # User statistics
         stats = {
             'total_ratings': len(user_ratings),
             'avg_rating': round(user_ratings['rating'].mean() * 5, 2),
@@ -301,7 +277,6 @@ def get_user_info(rec_system, user_id):
             'max_rating': round(user_ratings['rating'].max() * 5, 2)
         }
         
-        # Top rated items
         top_items = []
         for _, row in user_ratings.nlargest(5, 'rating').iterrows():
             item_code = rec_system.data_processor.item_id_to_code.get(row['item_id'], f"ITEM_{row['item_id']}")
@@ -312,7 +287,6 @@ def get_user_info(rec_system, user_id):
                 'rating': round(row['rating'] * 5, 2)
             })
         
-        # Category preferences
         category_preferences = {}
         for category in set(CATEGORY_MAPPING.values()):
             category_items = []
@@ -329,7 +303,6 @@ def get_user_info(rec_system, user_id):
                         'items_rated': len(category_ratings)
                     }
         
-        # Sort categories by preference
         sorted_categories = sorted(
             category_preferences.items(), 
             key=lambda x: x[1]['average_rating'], 
@@ -339,7 +312,7 @@ def get_user_info(rec_system, user_id):
         return {
             'stats': stats, 
             'top_items': top_items,
-            'category_preferences': dict(sorted_categories[:5]),  # Top 5 categories
+            'category_preferences': dict(sorted_categories[:5]),
             'preference_quality': 'high' if stats['avg_rating'] >= 3.5 else 'moderate' if stats['avg_rating'] >= 2.5 else 'low'
         }
         
@@ -348,21 +321,17 @@ def get_user_info(rec_system, user_id):
         return None
 
 def main():
-    # Header
+    """Main Streamlit application interface providing comprehensive dyslexia learning tool recommendation system with training, analytics, and user interaction capabilities."""
     st.markdown('<h1 class="main-header">🧠 Dyslexia Learning Tools Recommender</h1>', unsafe_allow_html=True)
     st.markdown("Complete Neural Collaborative Filtering System for Dyslexia Learning Tool Recommendations")
     
-    # Initialize system
     rec_system = initialize_system()
     
-    # Navigation
     tab1, tab2, tab3 = st.tabs(["🔧 System Setup", "👤 Get Recommendations", "📊 Analytics"])
     
-    # TAB 1: SYSTEM SETUP
     with tab1:
         st.header("🔧 System Setup & Training")
         
-        # Status indicators
         col1, col2, col3 = st.columns(3)
         with col1:
             if st.session_state.data_loaded:
@@ -385,7 +354,6 @@ def main():
         
         st.markdown("---")
         
-        # Data Loading Section
         st.subheader("📊 Step 1: Load Data")
         
         col1, col2 = st.columns(2)
@@ -408,23 +376,19 @@ def main():
             if st.button("📥 Load & Process Data", type="primary"):
                 with st.spinner("Loading and preprocessing data..."):
                     try:
-                        # Save files temporarily
                         with open("temp_demo.csv", "wb") as f:
                             f.write(demographic_file.getbuffer())
                         with open("temp_ratings.csv", "wb") as f:
                             f.write(ratings_file.getbuffer())
                         
-                        # Load data
                         rec_system.load_data("temp_demo.csv", "temp_ratings.csv")
                         st.session_state.data_loaded = True
                         
-                        # Clean up
                         os.remove("temp_demo.csv")
                         os.remove("temp_ratings.csv")
                         
                         st.success("✅ Data loaded and processed successfully!")
                         
-                        # Show data stats
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             st.metric("Users", rec_system.data_processor.num_users)
@@ -438,12 +402,10 @@ def main():
                     except Exception as e:
                         st.error(f"Error loading data: {str(e)}")
         
-        # Model Training Section
         if st.session_state.data_loaded:
             st.markdown("---")
             st.subheader("🎯 Step 2: Train Model")
             
-            # Show training configuration
             with st.expander("📋 Training Configuration"):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -466,13 +428,11 @@ def main():
                 if training_results:
                     st.session_state.model_trained = True
                     
-                    # Save model
                     rec_system.save_model('complete_dyslexia_model.pth')
                     
                     st.success("✅ Model trained and saved successfully!")
                     st.balloons()
                     
-                    # Show results
                     st.subheader("📈 Training Results")
                     col1, col2, col3, col4 = st.columns(4)
                     
@@ -485,14 +445,10 @@ def main():
                     with col4:
                         st.metric("Recall@10", f"{training_results['test_metrics']['recall_10']:.4f}")
                     
-                    # Training history
                     if 'training_history' in training_results:
                         history_df = pd.DataFrame(training_results['training_history'])
                         st.line_chart(history_df[['loss', 'val_loss']])
-                    
-                    # st.rerun()
     
-    # TAB 2: GET RECOMMENDATIONS
     with tab2:
         st.header("👤 Get Personalized Recommendations")
         
@@ -504,7 +460,6 @@ def main():
             st.warning("⚠️ Please train the model first in the System Setup tab.")
             return
         
-        # User type selection
         st.subheader("🎯 Select User Type")
         
         user_type = st.selectbox(
@@ -517,12 +472,10 @@ def main():
             }[x]
         )
         
-        # EXISTING USER SECTION
         if user_type == "existing_user":
             st.subheader("👤 Existing User Recommendations")
             st.info("Enter your User ID to get personalized recommendations based on your preferences")
             
-            # Simple user ID input only
             user_id = st.number_input(
                 "Your User ID",
                 min_value=0,
@@ -532,7 +485,6 @@ def main():
                 help="Enter your user ID (0-1204)"
             )
             
-            # Validate user exists when ID is entered
             if user_id >= 0:
                 user_info = get_user_info(rec_system, user_id) if st.session_state.model_trained else None
                 
@@ -541,12 +493,9 @@ def main():
                 elif user_id > 0:
                     st.error(f"❌ User {user_id} not found in the system")
             
-            # Generate recommendations button
             if st.button("🎯 Get My Recommendations", type="primary"):
-                # Create minimal user profile for existing user
                 user_profile = {'id': user_id}
                 
-                # Generate recommendations
                 with st.spinner("Analyzing your preferences and generating recommendations..."):
                     try:
                         recommendations_json = rec_system.get_recommendations(user_profile, top_k=10)
@@ -555,11 +504,9 @@ def main():
                         if 'error' in recommendations_data:
                             st.error(f"Error: {recommendations_data['error']}")
                         else:
-                            # Display user information first
                             if user_info:
                                 st.header(f"👤 User {user_id} Profile")
                                 
-                                # User statistics
                                 col1, col2, col3, col4 = st.columns(4)
                                 with col1:
                                     st.metric("Total Ratings", user_info['stats']['total_ratings'])
@@ -572,112 +519,20 @@ def main():
                                 with col4:
                                     st.metric("Categories Explored", len(user_info['category_preferences']))
                                 
-                                # Show user's highly rated items
                                 if user_info['top_items']:
                                     st.subheader("⭐ Your Highly Rated Items")
                                     for item in user_info['top_items'][:5]:
                                         st.markdown(f"- **{item['item_code']}** ({item['category']}): {item['rating']}/5.0")
                                 
-                                # Show category preferences
                                 if user_info['category_preferences']:
                                     st.subheader("📊 Your Category Preferences")
                                     for category, data in list(user_info['category_preferences'].items())[:10]:
                                         st.markdown(f"- **{category}**: {data['average_rating']}/5.0 ({data['items_rated']} items)")
-                            
-                            # Display recommendations
-                            # st.header("🎯 Your Personalized Recommendations")
-                            
-                            # if 'recommendations' in recommendations_data:
-                            #     recommendations = recommendations_data['recommendations']
-                                
-                            #     # Check for warning or info messages
-                            #     has_warning = any(r.get('recommendation_type') == 'warning' for r in recommendations)
-                            #     has_info = any(r.get('recommendation_type') == 'info' for r in recommendations)
-                                
-                            #     if has_warning:
-                            #         warning_item = next(r for r in recommendations if r.get('recommendation_type') == 'warning')
-                            #         st.markdown(f"""
-                            #         <div class="warning-card">
-                            #             <strong>⚠️ Notice:</strong> {warning_item['message']}
-                            #         </div>
-                            #         """, unsafe_allow_html=True)
-                            #         recommendations = [r for r in recommendations if r.get('recommendation_type') != 'warning']
-                                
-                            #     if has_info:
-                            #         info_item = next(r for r in recommendations if r.get('recommendation_type') == 'info')
-                            #         st.markdown(f"""
-                            #         <div class="info-card">
-                            #             <strong>ℹ️ Info:</strong> {info_item['message']}
-                            #         </div>
-                            #         """, unsafe_allow_html=True)
-                            #         recommendations = [r for r in recommendations if r.get('recommendation_type') != 'info']
-                                
-                            #     # Display recommendations with type indicators
-                            #     for i, rec in enumerate(recommendations):
-                            #         with st.container():
-                            #             col1, col2, col3, col4 = st.columns([1, 3, 2, 1])
-                                        
-                            #             with col1:
-                            #                 st.markdown(f"**#{i+1}**")
-                                        
-                            #             with col2:
-                            #                 st.markdown(f"**{rec.get('item_code', 'Unknown')}**")
-                            #                 st.caption(f"Category: {rec.get('category', 'Other')}")
-                                        
-                            #             # with col3:
-                            #             #     rec_type = rec.get('recommendation_type', 'unknown')
-                            #             #     if rec_type == 'user_specific':
-                            #             #         st.markdown("🎯 **Based on Your Preferences**")
-                            #             #     elif rec_type == 'popular_fallback':
-                            #             #         st.markdown("📈 *Popular Alternative*")
-                            #             #     else:
-                            #             #         st.markdown("🤖 *Model Prediction*")
-                                        
-                            #             # with col4:
-                            #             #     rating = rec.get('predicted_rating', 0)
-                            #             #     st.metric("Rating", f"{rating}/5.0")
-                                        
-                            #             st.markdown("---")
-                                
-                            #     # Analysis of recommendations
-                            #     st.subheader("📊 Recommendation Analysis")
-                                
-                            #     user_specific_count = sum(1 for r in recommendations if r.get('recommendation_type') == 'user_specific')
-                            #     popular_count = sum(1 for r in recommendations if r.get('recommendation_type') == 'popular_fallback')
-                                
-                            #     col1, col2 = st.columns(2)
-                                
-                            #     with col1:
-                            #         st.metric("Personalized Items", user_specific_count)
-                            #         st.metric("Popular Alternatives", popular_count)
-                                
-                            #     with col2:
-                            #         if user_specific_count > 0:
-                            #             avg_personal_rating = sum(r['predicted_rating'] for r in recommendations 
-                            #                                     if r.get('recommendation_type') == 'user_specific') / user_specific_count
-                            #             st.metric("Avg Personal Rating", f"{avg_personal_rating:.2f}/5.0")
-                                    
-                            #         # Category distribution
-                            #         rec_df = pd.DataFrame(recommendations)
-                            #         if 'category' in rec_df.columns:
-                            #             category_counts = rec_df['category'].value_counts()
-                            #             st.bar_chart(category_counts)
-                                
-                            #     # Download option
-                            #     csv = pd.DataFrame(recommendations).to_csv(index=False)
-                            #     st.download_button(
-                            #         "📥 Download My Recommendations",
-                            #         data=csv,
-                            #         file_name=f"user_{user_id}_recommendations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                            #         mime="text/csv"
-                            #     )
-                        
+                    
                     except Exception as e:
                         st.error(f"Error generating recommendations: {str(e)}")
         
-        # NEW USER SECTIONS
         else:
-            # User information form for new users
             with st.form("user_recommendation_form"):
                 st.subheader("📝 User Information")
                 
@@ -685,7 +540,6 @@ def main():
                 
                 with col1:
                     st.markdown("**Basic Information**")
-                    
                     user_id = st.number_input(
                         "Assign User ID",
                         min_value=7000,
@@ -712,14 +566,13 @@ def main():
                     other_difficulties_details = st.selectbox(
                         "If yes, which other difficulties?",
                         ['Altro','Difficoltà nel calcolo - Discalculia','Difficoltà nel calcolo - Discalculia, Altro',"Difficoltà nel calcolo - Discalculia, Difficoltà nell'ortografia - Disortografia","Difficoltà nel calcolo - Discalculia, Difficoltà nell'ortografia - Disortografia, Altro",'Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia','Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia, Altro',"Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia","Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia, Altro","Difficoltà nell'ortografia - Disortografia","Difficoltà nell'ortografia - Disortografia, Altro",'Difficoltà nella scrittura - Disgrafia','Difficoltà nella scrittura - Disgrafia, Altro',"Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia","Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia, Altro",'Nessuno']
-                    ) if has_other_difficulties == "Sì" else "Nessuno"
+                    ) if has_other_difficulties == "Si" else "Nessuno"
                     
                     family_history = st.selectbox(
                         "Family history of dyslexia?",
                         ["No", "Si"]
                     )
                 
-                # Preferences section
                 preferences = []
                 if user_type == "new_user_with_preference":
                     st.subheader("🎯 Learning Tool Preferences")
@@ -740,11 +593,9 @@ def main():
                             if rating > 3:
                                 preferences.append(category)
                 
-                # Submit button
                 submitted = st.form_submit_button("🎯 Get Recommendations", type="primary")
                 
                 if submitted:
-                    # Create user profile
                     user_profile = {
                         'id': user_id,
                         'age': age,
@@ -758,7 +609,6 @@ def main():
                     if user_type == "new_user_with_preference" and preferences:
                         user_profile['preferences'] = preferences
                     
-                    # Generate recommendations
                     with st.spinner("Generating personalized recommendations..."):
                         try:
                             recommendations_json = rec_system.get_recommendations(user_profile, top_k=10)
@@ -767,10 +617,8 @@ def main():
                             if 'error' in recommendations_data:
                                 st.error(f"Error: {recommendations_data['error']}")
                             else:
-                                # Display recommendations
                                 st.success("🌟 Recommendations Generated Successfully!")
                                 
-                                # User info summary
                                 col1, col2, col3 = st.columns(3)
                                 with col1:
                                     st.metric("User ID", recommendations_data.get('user_id', 'N/A'))
@@ -779,13 +627,11 @@ def main():
                                 with col3:
                                     st.metric("Model Type", "Neural Collaborative Filtering")
                                 
-                                # Recommendations
                                 if 'recommendations' in recommendations_data:
                                     st.subheader("🎯 Your Personalized Recommendations")
                                     
                                     recommendations = recommendations_data['recommendations']
                                     
-                                    # Display as cards
                                     for i, rec in enumerate(recommendations):
                                         with st.container():
                                             col1, col2, col3, col4 = st.columns([1, 3, 2, 1])
@@ -809,7 +655,6 @@ def main():
                                             
                                             st.markdown("---")
                                     
-                                    # Analysis
                                     st.subheader("📊 Recommendation Analysis")
                                     
                                     rec_df = pd.DataFrame(recommendations)
@@ -827,12 +672,10 @@ def main():
                                             avg_rating = rec_df['predicted_rating'].astype(float).mean()
                                             st.metric("Average Predicted Rating", f"{avg_rating:.2f}/5.0")
                                             
-                                            # Rating distribution
                                             rating_dist = rec_df['predicted_rating'].astype(float).value_counts().sort_index()
                                             st.bar_chart(rating_dist)
                                             st.caption("Rating distribution")
                                     
-                                    # Download
                                     csv = rec_df.to_csv(index=False)
                                     st.download_button(
                                         "📥 Download Recommendations",
@@ -844,7 +687,6 @@ def main():
                         except Exception as e:
                             st.error(f"Error generating recommendations: {str(e)}")
     
-    # TAB 3: ANALYTICS
     with tab3:
         st.header("📊 System Analytics & Insights")
         
@@ -852,7 +694,6 @@ def main():
             st.warning("⚠️ Please load data first to view analytics.")
             return
         
-        # Data overview
         st.subheader("📈 Dataset Overview")
         
         col1, col2, col3, col4 = st.columns(4)
@@ -868,7 +709,6 @@ def main():
                 avg_rating = rec_system.data_processor.ratings_data['rating'].mean() * 5
                 st.metric("Average Rating", f"{avg_rating:.2f}/5.0")
             
-            # Rating distribution
             st.subheader("📊 Rating Distribution")
             ratings_scaled = rec_system.data_processor.ratings_data['rating'] * 5
             hist_data = np.histogram(ratings_scaled, bins=20)
@@ -878,13 +718,11 @@ def main():
             })
             st.bar_chart(chart_data.set_index('Rating'))
             
-            # User activity
             st.subheader("👥 User Activity")
             user_activity = rec_system.data_processor.ratings_data['user_id'].value_counts()
             st.write(f"Most active user: {user_activity.index[0]} with {user_activity.iloc[0]} ratings")
             st.write(f"Average ratings per user: {user_activity.mean():.1f}")
             
-            # Category analysis
             st.subheader("🏷️ Category Analysis")
             
             category_stats = []
@@ -904,12 +742,10 @@ def main():
             if category_stats:
                 category_df = pd.DataFrame(category_stats)
                 
-                # Category averages
                 category_avg = category_df.groupby('Category')['Avg Rating'].mean().sort_values(ascending=False)
                 st.bar_chart(category_avg)
                 st.caption("Average ratings by category")
                 
-                # Top items
                 st.subheader("⭐ Top Rated Items")
                 top_items = category_df.nlargest(10, 'Avg Rating')
                 st.dataframe(top_items, use_container_width=True)
@@ -917,7 +753,6 @@ def main():
         except Exception as e:
             st.error(f"Error displaying analytics: {str(e)}")
     
-    # Footer
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666;'>

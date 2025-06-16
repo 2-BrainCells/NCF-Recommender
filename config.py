@@ -1,13 +1,8 @@
-"""
-Configuration file for Dyslexia Recommendation System
-"""
 import torch
 from typing import List, Dict
 
-# Device configuration
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-# Model hyperparameters (default values)
 DEFAULT_CONFIG = {
     'embedding_dims': 256,
     'hidden_dims': [512, 1024],
@@ -20,7 +15,6 @@ DEFAULT_CONFIG = {
     'early_stopping_patience': 3
 }
 
-# HPO configuration
 HPO_CONFIG = {
     'n_trials': 100,
     'timeout': 3600,
@@ -28,7 +22,6 @@ HPO_CONFIG = {
     'min_delta': 0.001
 }
 
-# Data processing configuration
 DATA_CONFIG = {
     'max_missing_ratio': 0.35,
     'knn_neighbors': 5,
@@ -36,7 +29,6 @@ DATA_CONFIG = {
     'exponential_decay_factor': 0.6
 }
 
-# Item category mapping
 CATEGORY_MAPPING = {
     'T1': 'Audio Book Tools', 'T2': 'Audio Book Tools',
     'T3': 'Color-Coded Text', 'T4': 'Assistive Writing Tools',
@@ -60,7 +52,6 @@ CATEGORY_MAPPING = {
     'S22': 'Online Study Resources'
 }
 
-# Logging configuration
 LOGGING_CONFIG = {
     'level': 'INFO',
     'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',

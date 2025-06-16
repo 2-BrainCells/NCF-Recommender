@@ -1,6 +1,3 @@
-"""
-Main Dyslexia Recommendation System
-"""
 import numpy as np
 import pandas as pd
 import os
@@ -15,10 +12,10 @@ from config import DEFAULT_CONFIG, LOGGING_CONFIG, DEVICE, CATEGORY_MAPPING
 from data_processor import DataProcessor
 from model import NeuralCollaborativeFiltering, TrainingEarlyStopping
 from hpo import HyperparameterOptimizer
-from utils import train_model_epoch, evaluate_model, get_popular_items
+from utils import train_model_epoch, evaluate_model, get_popular_items, validate_embedding_indices
 
 class DyslexiaRecommendationSystem:
-    """Main recommendation system class"""
+    """Comprehensive recommendation system for dyslexic learners providing personalized learning tool suggestions based on user profiles and collaborative filtering."""
 
     def __init__(self,
                  embedding_dims: int = None,
@@ -28,8 +25,7 @@ class DyslexiaRecommendationSystem:
                  weight_decay: float = None,
                  batch_size: int = None,
                  device: str = None):
-        
-        # Use default config if not provided
+        """Initialize recommendation system with configurable hyperparameters and component initialization."""
         config = DEFAULT_CONFIG.copy()
         self.embedding_dims = embedding_dims or config['embedding_dims']
         self.hidden_dims = hidden_dims or config['hidden_dims']
@@ -39,17 +35,15 @@ class DyslexiaRecommendationSystem:
         self.batch_size = batch_size or config['batch_size']
         self.device = device or DEVICE
 
-        # Initialize components
         self.data_processor = DataProcessor()
         self.model = None
         self.hpo_optimizer = None
         self.best_params = None
 
-        # Setup logging
         self._setup_logging()
 
     def _setup_logging(self):
-        """Setup logging configuration"""
+        """Configure logging system for tracking system operations and debugging information."""
         logging.basicConfig(
             level=getattr(logging, LOGGING_CONFIG['level']),
             format=LOGGING_CONFIG['format'],
@@ -61,7 +55,7 @@ class DyslexiaRecommendationSystem:
         self.logger = logging.getLogger(__name__)
 
     def load_data(self, demographic_file: str, ratings_file: str) -> None:
-        """Load and preprocess all data"""
+        """Load and preprocess demographic and rating data from CSV files into machine learning ready format."""
         try:
             self.logger.info("Loading data files...")
             if not os.path.exists(demographic_file) or not os.path.exists(ratings_file):
@@ -70,7 +64,6 @@ class DyslexiaRecommendationSystem:
             demographic_df = pd.read_csv(demographic_file)
             ratings_df = pd.read_csv(ratings_file)
 
-            # Process data using DataProcessor
             (self.data_processor.user_data,
              self.data_processor.item_data,
              self.data_processor.ratings_data) = self.data_processor.preprocess_data(
@@ -89,7 +82,7 @@ class DyslexiaRecommendationSystem:
                                        timeout: int = 3600,
                                        save_study: bool = True,
                                        study_name: str = 'dyslexia_ncf_optimization') -> Dict:
-        """Run hyperparameter optimization"""
+        """Execute automated hyperparameter optimization using Optuna framework to find optimal model configuration."""
         if self.data_processor.user_data is None:
             raise ValueError("Data must be loaded before running HPO")
 
@@ -104,11 +97,11 @@ class DyslexiaRecommendationSystem:
         }
 
     def train_model(self,
-                    epochs: int = None,
-                    validation_split: float = None,
-                    early_stopping_patience: int = None,
-                    use_best_params: bool = True) -> Dict:
-        """Train the recommendation model"""
+                   epochs: int = None,
+                   validation_split: float = None,
+                   early_stopping_patience: int = None,
+                   use_best_params: bool = True) -> Dict:
+        """Train neural collaborative filtering model with optional hyperparameter optimization results and comprehensive evaluation."""
         if self.data_processor.user_data is None:
             raise ValueError("Data must be loaded before training")
 
@@ -117,8 +110,13 @@ class DyslexiaRecommendationSystem:
         early_stopping_patience = early_stopping_patience or DEFAULT_CONFIG['early_stopping_patience']
 
         self.logger.info("Starting model training...")
+        
+        validate_embedding_indices(
+            self.data_processor.ratings_data,
+            self.data_processor.num_users,
+            self.data_processor.num_items
+        )
 
-        # Use HPO results if available and requested
         if use_best_params and self.best_params is not None:
             self.logger.info("Using optimized hyperparameters from HPO")
             self.embedding_dims = self.best_params['embedding_dims']
@@ -128,7 +126,6 @@ class DyslexiaRecommendationSystem:
             self.weight_decay = self.best_params['weight_decay']
             self.batch_size = self.best_params['batch_size']
 
-        # Split data
         train_data, val_data, test_data = self.data_processor.split_data(
             self.data_processor.user_data,
             self.data_processor.item_data,
@@ -136,7 +133,6 @@ class DyslexiaRecommendationSystem:
             validation_split
         )
 
-        # Use the actual counts from data processor
         num_users = self.data_processor.num_users
         num_items = self.data_processor.num_items
         user_feature_dim = self.data_processor.user_data.shape[1]
@@ -145,7 +141,6 @@ class DyslexiaRecommendationSystem:
         self.logger.info(f"Model dimensions - Users: {num_users}, Items: {num_items}, "
                         f"User features: {user_feature_dim}, Item features: {item_feature_dim}")
 
-        # Initialize model
         self.model = NeuralCollaborativeFiltering(
             num_users=num_users,
             num_items=num_items,
@@ -159,7 +154,6 @@ class DyslexiaRecommendationSystem:
 
         self.model.to(self.device)
 
-        # Setup training
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.Adam(
             self.model.parameters(),
@@ -172,13 +166,11 @@ class DyslexiaRecommendationSystem:
             delta=0.0002
         )
 
-        # Train model
         training_history = train_model_epoch(
             self.model, train_data, val_data, epochs, self.batch_size,
             optimizer, criterion, early_stopping, self.device
         )
 
-        # Evaluate on test set
         test_metrics = evaluate_model(self.model, test_data, self.batch_size, criterion, self.device)
 
         self.logger.info(f"Training completed. Test RMSE: {test_metrics['rmse']:.4f}")
@@ -189,15 +181,15 @@ class DyslexiaRecommendationSystem:
         }
 
     def get_recommendations(self, user_profile: Dict, top_k: int = 10) -> str:
-        """Get recommendations for a user and return as JSON"""
+        """Generate personalized recommendations for users based on profile analysis and return structured JSON response."""
         try:
             self._validate_user_profile(user_profile)
+            
             if self.model is None:
                 raise ValueError("Model must be trained before generating recommendations")
 
             user_id = user_profile.get('id')
 
-            # Check if user exists in the ratings data
             is_existing_user = False
             if user_id is not None:
                 user_exists_in_ratings = len(self.data_processor.ratings_data[
@@ -212,7 +204,6 @@ class DyslexiaRecommendationSystem:
             else:
                 recommendations = self._get_new_user_recommendations(user_profile, top_k)
 
-            # Format as JSON
             result = {
                 'user_id': user_id,
                 'user_type': 'existing' if is_existing_user else 'new',
@@ -238,11 +229,10 @@ class DyslexiaRecommendationSystem:
             return json.dumps({'error': str(e)})
 
     def _validate_user_profile(self, user_profile: Dict) -> None:
-        """Validate user profile data"""
+        """Validate user profile structure and preference categories against system constraints."""
         if not isinstance(user_profile, dict):
             raise ValueError("User profile must be a dictionary")
 
-        # For new users, validate required fields
         if 'preferences' in user_profile:
             valid_categories = set(self.data_processor.category_names)
             user_prefs = set(user_profile['preferences'])
@@ -251,9 +241,8 @@ class DyslexiaRecommendationSystem:
                 raise ValueError(f"Invalid preferences: {invalid_prefs}")
 
     def _get_existing_user_recommendations(self, user_id: int, top_k: int) -> List[Dict]:
-        """Get personalized recommendations based on user's high-rated items"""
+        """Generate personalized recommendations for existing users based on historical rating patterns and collaborative filtering."""
         try:
-            # Get user's interaction history
             user_ratings = self.data_processor.ratings_data[
                 self.data_processor.ratings_data['user_id'] == user_id
             ]
@@ -261,15 +250,12 @@ class DyslexiaRecommendationSystem:
             if len(user_ratings) == 0:
                 return [{'error': f'User {user_id} not found in the system'}]
 
-            # Get user's HIGH-RATED items (above their personal average)
             user_avg_rating = user_ratings['rating'].mean()
-            high_rated_threshold = max(user_avg_rating, 0.6)  # At least 3/5 stars
-
+            high_rated_threshold = max(user_avg_rating, 0.6)
             high_rated_items = user_ratings[user_ratings['rating'] >= high_rated_threshold]
 
             self.logger.info(f"User {user_id}: {len(high_rated_items)} high-rated items out of {len(user_ratings)} total")
 
-            # Get items user hasn't interacted with
             interacted_items = set(user_ratings['item_id'].values)
             all_items = set(range(self.data_processor.num_items))
             candidate_items = list(all_items - interacted_items)
@@ -277,45 +263,37 @@ class DyslexiaRecommendationSystem:
             if len(candidate_items) == 0:
                 return [{'info': 'User has interacted with all available items'}]
 
-            # Strategy 1: Category-based recommendations from high-rated items
             category_recommendations = self._get_category_based_recommendations(
                 high_rated_items, candidate_items, user_id
             )
 
-            # Strategy 2: Collaborative filtering from similar users
             collaborative_recommendations = self._get_collaborative_recommendations_from_high_rated(
                 high_rated_items, candidate_items, user_id
             )
 
-            # Combine recommendations with weights
             combined_recommendations = self._combine_personalized_recommendations(
                 category_recommendations, collaborative_recommendations
             )
 
-            # If we have enough personalized recommendations, return them
             if len(combined_recommendations) >= top_k:
                 return combined_recommendations[:top_k]
 
-            # If not enough personalized recommendations, fill with popular items
             popular_items = get_popular_items(
                 self.data_processor.ratings_data,
                 top_k - len(combined_recommendations),
                 self.data_processor.item_id_to_code
             )
 
-            # Mark popular items as fallback
             for item in popular_items:
                 item['recommendation_type'] = 'popular_fallback'
                 item['reason'] = 'Insufficient personalized recommendations'
 
-            # Mark personalized items
             for item in combined_recommendations:
                 item['recommendation_type'] = 'personalized'
 
             final_recommendations = combined_recommendations + popular_items
 
-            # Add user insight
-            if len(combined_recommendations) < top_k * 0.7:  # Less than 70% personalized
+            if len(combined_recommendations) < top_k * 0.7:
                 insight = {
                     'item_code': 'USER_INSIGHT',
                     'predicted_rating': 0,
@@ -325,62 +303,48 @@ class DyslexiaRecommendationSystem:
                 }
                 final_recommendations.insert(0, insight)
 
-            return final_recommendations[:top_k + 1]  # +1 for potential insight message
+            return final_recommendations[:top_k + 1]
 
         except Exception as e:
             self.logger.error(f"Error generating recommendations for user {user_id}: {str(e)}")
             return [{'error': f'Error generating recommendations: {str(e)}'}]
 
     def _get_category_based_recommendations(self, high_rated_items: pd.DataFrame, candidate_items: List[int], user_id: int) -> List[Dict]:
-        """Get recommendations based on categories of user's high-rated items"""
-
-        # Analyze user's preferred categories from high-rated items
+        """Analyze user's preferred categories from high-rated items and recommend similar category items with preference scoring."""
         category_preferences = {}
         category_item_counts = {}
-
+        
         for _, rating_row in high_rated_items.iterrows():
             item_id = rating_row['item_id']
-            rating = rating_row['rating'] * 5  # Convert to 1-5 scale
-
+            rating = rating_row['rating'] * 5
             item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
             category = CATEGORY_MAPPING.get(item_code, 'Other')
-
+            
             if category not in category_preferences:
                 category_preferences[category] = []
                 category_item_counts[category] = 0
-
+            
             category_preferences[category].append(rating)
             category_item_counts[category] += 1
 
-        # Calculate weighted category scores
         category_scores = {}
         for category, ratings in category_preferences.items():
             avg_rating = sum(ratings) / len(ratings)
             item_count = category_item_counts[category]
+            category_scores[category] = avg_rating * (1 + 0.1 * item_count)
 
-            # Weight by both average rating and interaction frequency
-            category_scores[category] = avg_rating * (1 + 0.1 * item_count)  # Bonus for more interactions
-
-        # Sort categories by preference
         sorted_categories = sorted(category_scores.items(), key=lambda x: x[1], reverse=True)
-
         self.logger.info(f"User {user_id} preferred categories: {sorted_categories[:5]}")
 
-        # Find candidate items in preferred categories
         recommendations = []
-
         for category, score in sorted_categories:
-            # Find candidate items in this category
             category_candidates = []
-
             for item_id in candidate_items:
                 item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
                 item_category = CATEGORY_MAPPING.get(item_code, 'Other')
-
                 if item_category == category:
                     category_candidates.append(item_id)
 
-            # Get average rating for items in this category (from all users)
             category_items_all = []
             for item_id, item_code in self.data_processor.item_id_to_code.items():
                 if CATEGORY_MAPPING.get(item_code, 'Other') == category:
@@ -394,13 +358,10 @@ class DyslexiaRecommendationSystem:
             else:
                 avg_category_rating = 3.5
 
-            # Add recommendations from this category
-            for item_id in category_candidates[:5]:  # Limit per category
+            for item_id in category_candidates[:5]:
                 item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
-
-                # Predicted rating based on user's preference for this category
-                predicted_rating = min(score * 0.8, 5.0)  # Scale down slightly and cap at 5
-
+                predicted_rating = min(score * 0.8, 5.0)
+                
                 recommendations.append({
                     'item_id': item_id,
                     'item_code': item_code,
@@ -410,23 +371,17 @@ class DyslexiaRecommendationSystem:
                     'user_category_score': round(score, 2)
                 })
 
-        # Sort by predicted rating
         return sorted(recommendations, key=lambda x: x['predicted_rating'], reverse=True)
 
     def _get_collaborative_recommendations_from_high_rated(self, high_rated_items: pd.DataFrame, candidate_items: List[int], user_id: int) -> List[Dict]:
-        """Find users with similar high-rated items and recommend what they liked"""
-
-        if len(high_rated_items) < 2:  # Need at least 2 high-rated items for similarity
+        """Find users with similar high-rated item preferences and recommend items they enjoyed using collaborative filtering approach."""
+        if len(high_rated_items) < 2:
             return []
 
-        # Get items that this user rated highly
         user_high_rated_item_ids = set(high_rated_items['item_id'].values)
 
-        # Find other users who also rated these items highly
         similar_users_scores = {}
-
         for item_id in user_high_rated_item_ids:
-            # Find other users who rated this item highly (>= 0.6 normalized, which is 3/5)
             item_ratings = self.data_processor.ratings_data[
                 (self.data_processor.ratings_data['item_id'] == item_id) &
                 (self.data_processor.ratings_data['rating'] >= 0.6) &
@@ -436,14 +391,10 @@ class DyslexiaRecommendationSystem:
             for _, rating_row in item_ratings.iterrows():
                 other_user_id = rating_row['user_id']
                 rating = rating_row['rating']
-
                 if other_user_id not in similar_users_scores:
                     similar_users_scores[other_user_id] = 0
-
-                # Add similarity score based on rating
                 similar_users_scores[other_user_id] += rating
 
-        # Get top similar users
         top_similar_users = sorted(similar_users_scores.items(), key=lambda x: x[1], reverse=True)[:10]
 
         if not top_similar_users:
@@ -451,37 +402,28 @@ class DyslexiaRecommendationSystem:
 
         self.logger.info(f"User {user_id}: Found {len(top_similar_users)} similar users")
 
-        # Get recommendations from similar users
         collaborative_scores = {}
-
         for similar_user_id, similarity_score in top_similar_users:
-            # Get this similar user's high-rated items
             similar_user_ratings = self.data_processor.ratings_data[
                 (self.data_processor.ratings_data['user_id'] == similar_user_id) &
-                (self.data_processor.ratings_data['rating'] >= 0.6)  # Their high-rated items
+                (self.data_processor.ratings_data['rating'] >= 0.6)
             ]
 
             for _, rating_row in similar_user_ratings.iterrows():
                 item_id = rating_row['item_id']
-                rating = rating_row['rating'] * 5  # Convert to 1-5 scale
+                rating = rating_row['rating'] * 5
 
-                # Only consider items that our user hasn't interacted with
                 if item_id in candidate_items:
                     if item_id not in collaborative_scores:
                         collaborative_scores[item_id] = 0
-
-                    # Weight by similarity and rating
                     weighted_score = (similarity_score / len(top_similar_users)) * rating
                     collaborative_scores[item_id] += weighted_score
 
-        # Create recommendations
         recommendations = []
         for item_id, score in collaborative_scores.items():
             item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
             category = CATEGORY_MAPPING.get(item_code, 'Other')
-
-            # Normalize score to 1-5 range
-            predicted_rating = min(score / 2, 5.0)  # Adjust scaling as needed
+            predicted_rating = min(score / 2, 5.0)
 
             recommendations.append({
                 'item_id': item_id,
@@ -495,34 +437,26 @@ class DyslexiaRecommendationSystem:
         return sorted(recommendations, key=lambda x: x['predicted_rating'], reverse=True)
 
     def _combine_personalized_recommendations(self, category_recs: List[Dict], collaborative_recs: List[Dict]) -> List[Dict]:
-        """Combine category-based and collaborative recommendations"""
-
-        # Create a unified scoring system
+        """Merge category-based and collaborative filtering recommendations using weighted scoring for optimal recommendation diversity."""
         combined_scores = {}
 
-        # Weight the different recommendation sources
-        category_weight = 0.6  # Higher weight for category preferences
+        category_weight = 0.6
         collaborative_weight = 0.4
 
-        # Add category-based scores
         for rec in category_recs:
             item_id = rec['item_id']
             if item_id not in combined_scores:
                 combined_scores[item_id] = {**rec, 'combined_score': 0, 'sources': []}
-
             combined_scores[item_id]['combined_score'] += category_weight * rec['predicted_rating']
             combined_scores[item_id]['sources'].append('category')
 
-        # Add collaborative scores
         for rec in collaborative_recs:
             item_id = rec['item_id']
             if item_id not in combined_scores:
                 combined_scores[item_id] = {**rec, 'combined_score': 0, 'sources': []}
-
             combined_scores[item_id]['combined_score'] += collaborative_weight * rec['predicted_rating']
             combined_scores[item_id]['sources'].append('collaborative')
 
-        # Convert back to list and sort
         final_recommendations = []
         for item_id, rec_data in combined_scores.items():
             rec_data['predicted_rating'] = round(rec_data['combined_score'], 2)
@@ -534,50 +468,38 @@ class DyslexiaRecommendationSystem:
         return sorted(final_recommendations, key=lambda x: x['predicted_rating'], reverse=True)
 
     def _get_new_user_recommendations(self, user_profile: Dict, top_k: int) -> List[Dict]:
-        """Get recommendations for new user"""
-        # If user has preferences, use them
+        """Generate recommendations for new users using preference-based filtering or popularity-based fallback strategies."""
         if 'preferences' in user_profile and user_profile['preferences']:
             return self._get_preference_based_recommendations(user_profile, top_k)
-
-        # Otherwise, recommend popular items
         return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
 
     def _get_preference_based_recommendations(self, user_profile: Dict, top_k: int) -> List[Dict]:
-        """Get recommendations based on user preferences"""
+        """Create recommendations based on explicitly stated user preferences using category average ratings."""
         user_preferences = user_profile['preferences']
 
-        # Find items in preferred categories
-        preferred_items = []
-
-        # Create a temporary item data with categories if not exists
         if not hasattr(self.data_processor, 'item_data_with_categories'):
             self._create_item_category_mapping()
 
+        preferred_items = []
         for category in user_preferences:
             if category in self.data_processor.category_names:
-                # Find items that belong to this category
                 category_items = []
                 for item_id, item_code in self.data_processor.item_id_to_code.items():
                     if item_code in CATEGORY_MAPPING and CATEGORY_MAPPING[item_code] == category:
                         category_items.append(item_id)
-
                 preferred_items.extend(category_items)
 
-        # Remove duplicates
         preferred_items = list(set(preferred_items))
 
         if len(preferred_items) == 0:
             return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
 
-        # For preference-based recommendations, use the category average ratings
         recommendations = []
         category_avg_ratings = self._get_category_average_ratings()
 
         for item_id in preferred_items:
             item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
             category = CATEGORY_MAPPING.get(item_code, 'Other')
-
-            # Get average rating for this category, default to 4.0
             avg_rating = category_avg_ratings.get(category, 4.0)
 
             recommendations.append({
@@ -587,10 +509,8 @@ class DyslexiaRecommendationSystem:
                 'category': category
             })
 
-        # Sort by predicted rating
         sorted_recommendations = sorted(recommendations, key=lambda x: x['predicted_rating'], reverse=True)
 
-        # If we don't have enough recommendations, fill with popular items
         if len(sorted_recommendations) < top_k:
             popular_items = get_popular_items(
                 self.data_processor.ratings_data,
@@ -602,9 +522,8 @@ class DyslexiaRecommendationSystem:
         return sorted_recommendations[:top_k]
 
     def get_user_information(self, user_id: int) -> Dict:
-        """Get detailed information about an existing user"""
+        """Retrieve comprehensive user analytics including rating statistics, top preferences, and category analysis."""
         try:
-            # Check if user exists
             user_ratings = self.data_processor.ratings_data[
                 self.data_processor.ratings_data['user_id'] == user_id
             ]
@@ -612,7 +531,6 @@ class DyslexiaRecommendationSystem:
             if len(user_ratings) == 0:
                 return {'error': f'User {user_id} not found in the system'}
 
-            # Get user's rating statistics
             user_stats = {
                 'total_ratings': len(user_ratings),
                 'average_rating': round(user_ratings['rating'].mean() * 5, 2),
@@ -620,10 +538,8 @@ class DyslexiaRecommendationSystem:
                 'max_rating': round(user_ratings['rating'].max() * 5, 2)
             }
 
-            # Get user's top rated items (above 3.5/5.0)
-            high_rated = user_ratings[user_ratings['rating'] > 0.7]  # 3.5/5.0 in normalized scale
+            high_rated = user_ratings[user_ratings['rating'] > 0.7]
             top_items = []
-
             for _, row in high_rated.nlargest(10, 'rating').iterrows():
                 item_code = self.data_processor.item_id_to_code.get(row['item_id'], f"ITEM_{row['item_id']}")
                 category = CATEGORY_MAPPING.get(item_code, 'Other')
@@ -633,10 +549,8 @@ class DyslexiaRecommendationSystem:
                     'rating': round(row['rating'] * 5, 2)
                 })
 
-            # Get user's category preferences
             category_preferences = {}
             for category in set(CATEGORY_MAPPING.values()):
-                # Find items in this category that user has rated
                 category_items = []
                 for item_id, item_code in self.data_processor.item_id_to_code.items():
                     if CATEGORY_MAPPING.get(item_code, 'Other') == category:
@@ -651,7 +565,6 @@ class DyslexiaRecommendationSystem:
                             'items_rated': len(category_ratings)
                         }
 
-            # Sort categories by preference
             sorted_categories = sorted(
                 category_preferences.items(),
                 key=lambda x: x[1]['average_rating'],
@@ -662,7 +575,7 @@ class DyslexiaRecommendationSystem:
                 'user_id': user_id,
                 'statistics': user_stats,
                 'highly_rated_items': top_items,
-                'category_preferences': dict(sorted_categories[:10]),  # Top 10 categories
+                'category_preferences': dict(sorted_categories[:10]),
                 'total_categories_rated': len(category_preferences),
                 'preference_quality': 'high' if user_stats['average_rating'] >= 3.5 else 'moderate' if user_stats['average_rating'] >= 2.5 else 'low'
             }
@@ -672,7 +585,7 @@ class DyslexiaRecommendationSystem:
             return {'error': str(e)}
 
     def save_model(self, filepath: str) -> None:
-        """Save the trained model and system state"""
+        """Serialize trained model and complete system state to file for later restoration and deployment."""
         if self.model is None:
             raise ValueError("No trained model to save")
 
@@ -712,13 +625,12 @@ class DyslexiaRecommendationSystem:
         self.logger.info(f"Model and data saved to {filepath}")
 
     def load_model(self, filepath: str) -> None:
-        """Load a saved model and system state"""
+        """Restore trained model and system state from serialized file for immediate recommendation generation."""
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Model file not found: {filepath}")
 
         model_state = torch.load(filepath, map_location=self.device)
 
-        # Restore system state
         system_state = model_state['system_state']
         self.data_processor.item_id_to_code = system_state['item_id_to_code']
         self.data_processor.category_names = system_state['category_names']
@@ -729,7 +641,6 @@ class DyslexiaRecommendationSystem:
         self.data_processor.num_users = system_state['num_users']
         self.data_processor.num_items = system_state['num_items']
 
-        # Restore preprocessed data
         if 'preprocessed_data' in model_state:
             preprocessed_data = model_state['preprocessed_data']
             self.data_processor.user_data = preprocessed_data['user_data']
@@ -739,11 +650,9 @@ class DyslexiaRecommendationSystem:
         else:
             self.logger.warning("No preprocessed data found in saved model")
 
-        # Restore HPO results if available
         if 'hpo_results' in model_state:
             self.best_params = model_state['hpo_results']['best_params']
 
-        # Recreate and load model
         config = model_state['model_config']
         self.model = NeuralCollaborativeFiltering(
             num_users=config['num_users'],
@@ -761,7 +670,7 @@ class DyslexiaRecommendationSystem:
         self.logger.info(f"Model loaded from {filepath}")
 
     def _create_item_category_mapping(self):
-        """Create mapping between items and categories"""
+        """Create internal mapping structure between items and their categorical classifications for efficient lookup operations."""
         self.data_processor.item_data_with_categories = {}
         for item_id, item_code in self.data_processor.item_id_to_code.items():
             category = CATEGORY_MAPPING.get(item_code, 'Other')
@@ -770,29 +679,25 @@ class DyslexiaRecommendationSystem:
             self.data_processor.item_data_with_categories[category].append(item_id)
 
     def _get_category_average_ratings(self) -> Dict[str, float]:
-        """Get average ratings per category"""
+        """Calculate mean rating scores for each item category to support preference-based recommendation scoring."""
         category_ratings = {}
-
         for category in self.data_processor.category_names:
-            # Find items in this category
             category_items = []
             for item_id, item_code in self.data_processor.item_id_to_code.items():
                 if CATEGORY_MAPPING.get(item_code, 'Other') == category:
                     category_items.append(item_id)
 
             if category_items:
-                # Get ratings for items in this category
                 category_item_ratings = self.data_processor.ratings_data[
                     self.data_processor.ratings_data['item_id'].isin(category_items)
                 ]['rating']
-
+                
                 if len(category_item_ratings) > 0:
-                    # Convert back to 1-5 scale and get average
                     avg_rating = category_item_ratings.mean() * 5
                     category_ratings[category] = avg_rating
                 else:
-                    category_ratings[category] = 4.0  # Default rating
+                    category_ratings[category] = 4.0
             else:
-                category_ratings[category] = 4.0  # Default rating
-                
+                category_ratings[category] = 4.0
+
         return category_ratings

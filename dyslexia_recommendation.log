@@ -1,0 +1,134 @@
+2025-06-16 10:36:15,399 - recommendation_system - INFO - Loading data files...
+2025-06-16 10:36:15,406 - recommendation_system - ERROR - Error loading data: Required data files not found
+2025-06-16 10:37:54,975 - recommendation_system - INFO - Loading data files...
+2025-06-16 10:37:55,104 - data_processor - INFO - Starting data preprocessing...
+2025-06-16 10:37:55,117 - data_processor - INFO - Created item data: 39 items
+2025-06-16 10:37:55,396 - data_processor - INFO - Created ratings data: 46956 ratings
+2025-06-16 10:37:55,418 - data_processor - INFO - Created user data: 1216 users
+2025-06-16 10:37:55,829 - data_processor - INFO - Final data shapes - Users: (46956, 81), Items: (46956, 27), Ratings: (46956, 3)
+2025-06-16 10:37:55,829 - recommendation_system - INFO - Data loaded successfully: 46956 users, 46956 items, 46956 ratings
+2025-06-16 10:37:55,829 - recommendation_system - INFO - Starting model training...
+2025-06-16 10:37:55,918 - recommendation_system - INFO - Model dimensions - Users: 1204, Items: 39, User features: 81, Item features: 27
+2025-06-16 10:42:10,491 - recommendation_system - INFO - Training completed. Test RMSE: 0.2279
+2025-06-16 10:42:10,965 - recommendation_system - INFO - Model and data saved to dyslexia_model.pth
+2025-06-16 10:42:10,971 - recommendation_system - INFO - User 7000 - Existing: False
+2025-06-16 10:42:11,023 - recommendation_system - INFO - User 8000 - Existing: False
+2025-06-16 10:42:11,070 - recommendation_system - INFO - User 400 - Existing: True
+2025-06-16 10:42:11,072 - recommendation_system - INFO - User 400: 24 high-rated items out of 39 total
+2025-06-16 10:42:28,393 - recommendation_system - INFO - User 5 - Existing: True
+2025-06-16 10:42:28,396 - recommendation_system - INFO - User 5: 22 high-rated items out of 39 total
+2025-06-16 10:42:36,447 - recommendation_system - INFO - User 89 - Existing: True
+2025-06-16 10:42:36,450 - recommendation_system - INFO - User 89: 19 high-rated items out of 39 total
+2025-06-16 10:42:47,036 - recommendation_system - INFO - User 78233 - Existing: False
+2025-06-16 10:42:58,756 - recommendation_system - INFO - User 3243 - Existing: False
+2025-06-16 10:43:10,169 - recommendation_system - INFO - User 4434 - Existing: False
+2025-06-16 10:45:27,789 - recommendation_system - INFO - Loading data files...
+2025-06-16 10:45:27,843 - data_processor - INFO - Starting data preprocessing...
+2025-06-16 10:45:27,843 - data_processor - INFO - Created item data: 39 items
+2025-06-16 10:45:28,127 - data_processor - INFO - Created ratings data: 46956 ratings
+2025-06-16 10:45:28,127 - data_processor - INFO - Created user data: 1216 users
+2025-06-16 10:45:28,491 - data_processor - INFO - Final data shapes - Users: (46956, 81), Items: (46956, 27), Ratings: (46956, 3)
+2025-06-16 10:45:28,491 - recommendation_system - INFO - Data loaded successfully: 46956 users, 46956 items, 46956 ratings
+2025-06-16 10:45:28,491 - hpo - INFO - Starting hyperparameter optimization...
+2025-06-16 10:45:32,524 - hpo - ERROR - Error during HPO: index out of range in self
+2025-06-16 10:49:55,889 - recommendation_system - INFO - Loading data files...
+2025-06-16 10:49:55,962 - data_processor - INFO - Starting data preprocessing...
+2025-06-16 10:49:55,995 - data_processor - INFO - Created item data: 39 items
+2025-06-16 10:49:56,282 - data_processor - INFO - Created ratings data: 46956 ratings
+2025-06-16 10:49:56,291 - data_processor - INFO - Created user data: 1216 users
+2025-06-16 10:49:56,678 - data_processor - INFO - Final data shapes - Users: (46956, 81), Items: (46956, 27), Ratings: (46956, 3)
+2025-06-16 10:49:56,679 - recommendation_system - INFO - Data loaded successfully: 46956 users, 46956 items, 46956 ratings
+2025-06-16 10:49:56,681 - hpo - INFO - Starting hyperparameter optimization...
+2025-06-16 10:50:00,583 - hpo - ERROR - Error during HPO: index out of range in self
+2025-06-16 10:54:48,971 - recommendation_system - INFO - Loading data files...
+2025-06-16 10:54:49,035 - data_processor - INFO - Starting data preprocessing...
+2025-06-16 10:54:49,037 - data_processor - INFO - Created item data: 39 items
+2025-06-16 10:54:49,331 - data_processor - INFO - Created ratings data: 46956 ratings
+2025-06-16 10:54:49,346 - data_processor - INFO - Created user data: 1216 users
+2025-06-16 10:54:49,830 - data_processor - INFO - Final data shapes - Users: (46956, 81), Items: (46956, 27), Ratings: (46956, 3)
+2025-06-16 10:54:49,831 - recommendation_system - INFO - Data loaded successfully: 46956 users, 46956 items, 46956 ratings
+2025-06-16 10:54:49,833 - hpo - INFO - Starting hyperparameter optimization...
+2025-06-16 11:28:47,291 - hpo - INFO - Hyperparameter optimization completed!
+2025-06-16 11:28:47,292 - hpo - INFO - Best trial value: 0.061724
+2025-06-16 11:28:47,293 - hpo - INFO - Best parameters: {'batch_size': 128, 'embedding_dims': 128, 'dropout': 0.2384003092441529, 'lr': 0.00017991126567896116, 'weight_decay': 5.2211555663033136e-05, 'n_layers': 4, 'hidden_dim_layer_0': 256, 'hidden_dim_layer_1': 128, 'hidden_dim_layer_2': 1024, 'hidden_dim_layer_3': 512}
+2025-06-16 11:28:47,302 - hpo - INFO - Study saved to dyslexia_ncf_optimization_study.pkl
+2025-06-16 11:28:47,307 - recommendation_system - INFO - Starting model training...
+2025-06-16 11:28:47,309 - recommendation_system - INFO - Using optimized hyperparameters from HPO
+2025-06-16 11:28:47,358 - recommendation_system - INFO - Model dimensions - Users: 1204, Items: 39, User features: 81, Item features: 27
+2025-06-16 11:32:37,962 - recommendation_system - INFO - Training completed. Test RMSE: 0.2222
+2025-06-16 11:32:38,392 - recommendation_system - INFO - Model and data saved to dyslexia_model_optimized.pth
+2025-06-16 11:32:38,400 - recommendation_system - INFO - User 7000 - Existing: False
+2025-06-16 11:32:38,446 - recommendation_system - INFO - User 8000 - Existing: False
+2025-06-16 11:32:38,483 - recommendation_system - INFO - User 400 - Existing: True
+2025-06-16 11:32:38,486 - recommendation_system - INFO - User 400: 24 high-rated items out of 39 total
+2025-06-16 11:33:44,107 - recommendation_system - INFO - User 5 - Existing: True
+2025-06-16 11:33:44,109 - recommendation_system - INFO - User 5: 22 high-rated items out of 39 total
+2025-06-16 11:33:48,223 - recommendation_system - INFO - User 6545 - Existing: False
+2025-06-16 11:33:52,284 - recommendation_system - INFO - User 8765 - Existing: False
+2025-06-16 11:34:10,443 - recommendation_system - INFO - Loading data files...
+2025-06-16 11:34:10,502 - data_processor - INFO - Starting data preprocessing...
+2025-06-16 11:34:10,502 - data_processor - INFO - Created item data: 39 items
+2025-06-16 11:34:10,745 - data_processor - INFO - Created ratings data: 46956 ratings
+2025-06-16 11:34:10,752 - data_processor - INFO - Created user data: 1216 users
+2025-06-16 11:34:11,067 - data_processor - INFO - Final data shapes - Users: (46956, 81), Items: (46956, 27), Ratings: (46956, 3)
+2025-06-16 11:34:11,067 - recommendation_system - INFO - Data loaded successfully: 46956 users, 46956 items, 46956 ratings
+2025-06-16 11:34:11,075 - recommendation_system - INFO - Starting model training...
+2025-06-16 11:34:11,139 - recommendation_system - INFO - Model dimensions - Users: 1204, Items: 39, User features: 81, Item features: 27
+2025-06-16 11:38:44,406 - recommendation_system - INFO - Training completed. Test RMSE: 0.2188
+2025-06-16 11:38:44,850 - recommendation_system - INFO - Model and data saved to dyslexia_model.pth
+2025-06-16 11:38:44,857 - recommendation_system - INFO - User 7000 - Existing: False
+2025-06-16 11:38:44,912 - recommendation_system - INFO - User 8000 - Existing: False
+2025-06-16 11:38:44,964 - recommendation_system - INFO - User 400 - Existing: True
+2025-06-16 11:38:44,966 - recommendation_system - INFO - User 400: 24 high-rated items out of 39 total
+2025-06-16 11:39:15,528 - recommendation_system - INFO - User 4 - Existing: True
+2025-06-16 11:39:15,528 - recommendation_system - INFO - User 4: 29 high-rated items out of 39 total
+2025-06-16 11:39:21,896 - recommendation_system - INFO - User 5456 - Existing: False
+2025-06-16 11:39:28,892 - recommendation_system - INFO - User 4353 - Existing: False
+2025-06-16 11:40:05,000 - data_processor - INFO - Starting data preprocessing...
+2025-06-16 11:40:05,006 - data_processor - INFO - Created item data: 39 items
+2025-06-16 11:40:05,323 - data_processor - INFO - Created ratings data: 46956 ratings
+2025-06-16 11:40:05,333 - data_processor - INFO - Created user data: 1216 users
+2025-06-16 11:40:05,764 - data_processor - INFO - Final data shapes - Users: (46956, 81), Items: (46956, 27), Ratings: (46956, 3)
+2025-06-16 11:48:28,198 - recommendation_system - INFO - User 100 - Existing: True
+2025-06-16 11:48:28,205 - recommendation_system - INFO - User 100: 25 high-rated items out of 39 total
+2025-06-16 11:48:33,646 - recommendation_system - INFO - User 100 - Existing: True
+2025-06-16 11:48:33,662 - recommendation_system - INFO - User 100: 25 high-rated items out of 39 total
+2025-06-16 11:48:34,071 - recommendation_system - INFO - User 100 - Existing: True
+2025-06-16 11:48:34,079 - recommendation_system - INFO - User 100: 25 high-rated items out of 39 total
+2025-06-16 11:48:58,321 - recommendation_system - INFO - User 9999 - Existing: False
+2025-06-16 11:49:04,495 - recommendation_system - INFO - User 9999 - Existing: False
+2025-06-16 11:49:09,484 - recommendation_system - INFO - User 9999 - Existing: False
+2025-06-16 11:49:23,395 - recommendation_system - INFO - User 9999 - Existing: False
+2025-06-16 11:54:43,645 - recommendation_system - INFO - Loading data files...
+2025-06-16 11:54:43,785 - data_processor - INFO - Starting data preprocessing...
+2025-06-16 11:54:43,799 - data_processor - INFO - Created item data: 39 items
+2025-06-16 11:54:44,070 - data_processor - INFO - Created ratings data: 46956 ratings
+2025-06-16 11:54:44,081 - data_processor - INFO - Created user data: 1216 users
+2025-06-16 11:54:44,536 - data_processor - INFO - Final data shapes - Users: (46956, 81), Items: (46956, 27), Ratings: (46956, 3)
+2025-06-16 11:54:44,536 - recommendation_system - INFO - Data loaded successfully: 46956 users, 46956 items, 46956 ratings
+2025-06-16 11:57:07,616 - recommendation_system - INFO - Model and data saved to complete_dyslexia_model.pth
+2025-06-16 11:57:37,385 - recommendation_system - INFO - User 34 - Existing: True
+2025-06-16 11:57:37,388 - recommendation_system - INFO - User 34: 26 high-rated items out of 39 total
+2025-06-16 11:58:07,552 - recommendation_system - INFO - User 7000 - Existing: False
+2025-06-16 11:58:26,495 - recommendation_system - INFO - User 7000 - Existing: False
+2025-06-16 11:59:38,749 - recommendation_system - INFO - Loading data files...
+2025-06-16 11:59:38,889 - data_processor - INFO - Starting data preprocessing...
+2025-06-16 11:59:38,892 - data_processor - INFO - Created item data: 39 items
+2025-06-16 11:59:39,176 - data_processor - INFO - Created ratings data: 46956 ratings
+2025-06-16 11:59:39,186 - data_processor - INFO - Created user data: 1216 users
+2025-06-16 11:59:39,657 - data_processor - INFO - Final data shapes - Users: (46956, 81), Items: (46956, 27), Ratings: (46956, 3)
+2025-06-16 11:59:39,658 - recommendation_system - INFO - Data loaded successfully: 46956 users, 46956 items, 46956 ratings
+2025-06-16 12:02:02,450 - recommendation_system - INFO - Model and data saved to complete_dyslexia_model.pth
+2025-06-16 12:07:59,894 - recommendation_system - INFO - Loading data files...
+2025-06-16 12:08:00,038 - data_processor - INFO - Starting data preprocessing...
+2025-06-16 12:08:00,041 - data_processor - INFO - Created item data: 39 items
+2025-06-16 12:08:00,363 - data_processor - INFO - Created ratings data: 46956 ratings
+2025-06-16 12:08:00,376 - data_processor - INFO - Created user data: 1216 users
+2025-06-16 12:08:00,841 - data_processor - INFO - Final data shapes - Users: (46956, 81), Items: (46956, 27), Ratings: (46956, 3)
+2025-06-16 12:08:00,842 - recommendation_system - INFO - Data loaded successfully: 46956 users, 46956 items, 46956 ratings
+2025-06-16 12:10:23,500 - recommendation_system - INFO - Model and data saved to complete_dyslexia_model.pth
+2025-06-16 12:11:48,848 - recommendation_system - INFO - User 7000 - Existing: False
+2025-06-16 12:12:03,630 - recommendation_system - INFO - User 7000 - Existing: False
+2025-06-16 12:12:21,096 - recommendation_system - INFO - User 7000 - Existing: False
+2025-06-16 12:12:29,874 - recommendation_system - INFO - User 7 - Existing: True
+2025-06-16 12:12:29,880 - recommendation_system - INFO - User 7: 18 high-rated items out of 39 total
