@@ -1,0 +1,5 @@
+# Ignore Python pickle files
+*.pkl
+
+# Ignore PyTorch model files  
+*.pth
