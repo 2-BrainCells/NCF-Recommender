@@ -146,9 +146,9 @@ class DyslexiaRecommendationSystem:
             num_items=num_items,
             user_feature_dim=user_feature_dim,
             item_feature_dim=item_feature_dim,
-            embedding_dims=self.embedding_dims,
-            hidden_dims=self.hidden_dims,
-            dropout=self.dropout,
+            embedding_dims=self.embedding_dims, # 256
+            hidden_dims=self.hidden_dims, # [512, 1024] from hpo
+            dropout=self.dropout, # dropout 0.14
             device=self.device
         )
 
@@ -467,11 +467,88 @@ class DyslexiaRecommendationSystem:
 
         return sorted(final_recommendations, key=lambda x: x['predicted_rating'], reverse=True)
 
+    # Update this in recommendation_system.py
     def _get_new_user_recommendations(self, user_profile: Dict, top_k: int) -> List[Dict]:
-        """Generate recommendations for new users using preference-based filtering or popularity-based fallback strategies."""
-        if 'preferences' in user_profile and user_profile['preferences']:
-            return self._get_preference_based_recommendations(user_profile, top_k)
-        return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
+        """Generate true cold-start recommendations using the trained NCF model and demographic data."""
+        
+        # If the model isn't trained yet, fallback to popular items
+        if self.model is None:
+            return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
+
+        try:
+            # 1. Prepare User Demographic Features
+            # Create a mock dataframe row for the new user
+            new_user_df = pd.DataFrame([{
+                'age': user_profile.get('age', 25),
+                'gender': user_profile.get('gender', 'M'),
+                'diagnosis_timing': user_profile.get('diagnosis_timing', 'Medie'),
+                'has_other_difficulties': user_profile.get('has_other_difficulties', 'No, solo dislessia'),
+                'other_difficulties_details': user_profile.get('other_difficulties_details', 'Nessuno'),
+                'family_history': user_profile.get('family_history', 'No')
+            }])
+            
+            # Encode using the same column structure as training
+            encoded_user = pd.get_dummies(new_user_df)
+            
+            # Ensure all training columns exist (fill missing with 0)
+            train_columns = self.data_processor.user_data.drop('user_id', axis=1, errors='ignore').columns
+            for col in train_columns:
+                if col not in encoded_user.columns:
+                    encoded_user[col] = 0.0
+            
+            # Order columns exactly as in training
+            encoded_user = encoded_user[train_columns].values[0]
+            
+            # 2. Setup PyTorch Tensors
+            # Use the OOV index (self.data_processor.num_users) for the new user
+            user_id_tensor = torch.LongTensor([self.data_processor.num_users] * self.data_processor.num_items).to(self.device)
+            item_id_tensor = torch.LongTensor(list(range(self.data_processor.num_items))).to(self.device)
+            
+            user_features_tensor = torch.FloatTensor([encoded_user] * self.data_processor.num_items).to(self.device)
+            # Reconstruct the exact one-hot encoded features for just the 39 unique items
+            item_features_list = []
+            for item_idx in range(self.data_processor.num_items):
+                item_code = self.data_processor.item_id_to_code.get(item_idx)
+                category = CATEGORY_MAPPING.get(item_code, 'Other')
+                # Create one-hot vector matching the exact training dimension order
+                feat = [1.0 if cat == category else 0.0 for cat in self.data_processor.category_names]
+                item_features_list.append(feat)
+                
+            item_features_tensor = torch.FloatTensor(item_features_list).to(self.device)
+
+            # 3. Predict across all items
+            self.model.eval()
+            with torch.no_grad():
+                predictions = self.model(user_id_tensor, item_id_tensor, user_features_tensor, item_features_tensor)
+                predictions = predictions.cpu().numpy().flatten() * 5.0 # Scale back up to 1-5
+
+            # 4. Format Output
+            recommendations = []
+            for item_id, pred_rating in enumerate(predictions):
+                item_code = self.data_processor.item_id_to_code.get(item_id, f'ITEM_{item_id}')
+                recommendations.append({
+                    'item_id': item_id,
+                    'item_code': item_code,
+                    'predicted_rating': min(round(float(pred_rating), 2), 5.0),
+                    'category': CATEGORY_MAPPING.get(item_code, 'Other'),
+                    'source': 'ncf_cold_start'
+                })
+
+            # Add explicit preference boost if provided
+            if 'preferences' in user_profile and user_profile['preferences']:
+                for rec in recommendations:
+                    if rec['category'] in user_profile['preferences']:
+                        rec['predicted_rating'] = round(min(rec['predicted_rating'] + 0.5, 5.0), 2)
+
+            # Sort and return top_k
+            return sorted(recommendations, key=lambda x: x['predicted_rating'], reverse=True)[:top_k]
+
+        except Exception as e:
+            self.logger.error(f"Cold start inference failed: {str(e)}")
+            # Fallback to pure preference or popularity
+            if 'preferences' in user_profile and user_profile['preferences']:
+                return self._get_preference_based_recommendations(user_profile, top_k)
+            return get_popular_items(self.data_processor.ratings_data, top_k, self.data_processor.item_id_to_code)
 
     def _get_preference_based_recommendations(self, user_profile: Dict, top_k: int) -> List[Dict]:
         """Create recommendations based on explicitly stated user preferences using category average ratings."""

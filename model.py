@@ -11,9 +11,9 @@ class NeuralCollaborativeFiltering(nn.Module):
                  num_items: int,
                  user_feature_dim: int,
                  item_feature_dim: int,
-                 embedding_dims: int,
-                 hidden_dims: List[int],
-                 dropout: float = 0.1,
+                 embedding_dims: int, # 256
+                 hidden_dims: List[int], # [512, 1024]
+                 dropout: float = 0.1, # [.14]
                  device: str = 'cpu',
                  trial: Optional[optuna.Trial] = None):
         """Initialize neural collaborative filtering model with configurable architecture for user-item interaction prediction."""

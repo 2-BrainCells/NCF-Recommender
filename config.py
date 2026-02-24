@@ -4,27 +4,25 @@ from typing import List, Dict
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 DEFAULT_CONFIG = {
-    'embedding_dims': 256,
-    'hidden_dims': [512, 1024],
-    'dropout': 0.14,
-    'learning_rate': 5.2e-05,
-    'weight_decay': 1.98e-05,
-    'batch_size': 128,
-    'epochs': 10,
+    'embedding_dims': 16,            # Reduced from 256
+    'hidden_dims': [64, 32],         # Reduced from [512, 1024]
+    'dropout': 0.2,
+    'learning_rate': 1e-3,           # Adjusted for stable explicit feedback learning
+    'weight_decay': 1e-5,
+    'batch_size': 64,                # Reduced for sparse data
+    'epochs': 20,
     'validation_split': 0.2,
     'early_stopping_patience': 3
 }
 
 HPO_CONFIG = {
-    'n_trials': 100,
-    'timeout': 3600,
-    'patience': 10,
+    'n_trials': 50,
+    'timeout': 1800,
+    'patience': 5,
     'min_delta': 0.001
 }
 
 DATA_CONFIG = {
-    'max_missing_ratio': 0.35,
-    'knn_neighbors': 5,
     'rating_scale': 5.0,
     'exponential_decay_factor': 0.6
 }

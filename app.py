@@ -433,17 +433,19 @@ def main():
                     st.success("✅ Model trained and saved successfully!")
                     st.balloons()
                     
-                    st.subheader("📈 Training Results")
-                    col1, col2, col3, col4 = st.columns(4)
+                    st.subheader("📈 Ranking & Prediction Results")
+                    col1, col2, col3, col4, col5 = st.columns(5)
                     
                     with col1:
-                        st.metric("Test RMSE", f"{training_results['test_metrics']['rmse']:.4f}")
+                        st.metric("Hit Rate@10", f"{training_results['test_metrics']['hit_rate_10']:.4f}")
                     with col2:
-                        st.metric("Test R²", f"{training_results['test_metrics']['r2']:.4f}")
+                        st.metric("NDCG@10", f"{training_results['test_metrics']['ndcg_10']:.4f}")
                     with col3:
-                        st.metric("Precision@10", f"{training_results['test_metrics']['precision_10']:.4f}")
+                        st.metric("ARHR@10", f"{training_results['test_metrics']['arhr_10']:.4f}")
                     with col4:
-                        st.metric("Recall@10", f"{training_results['test_metrics']['recall_10']:.4f}")
+                        st.metric("Precision", f"{training_results['test_metrics']['precision_10']:.4f}")
+                    with col5:
+                        st.metric("RMSE", f"{training_results['test_metrics']['rmse']:.4f}")
                     
                     if 'training_history' in training_results:
                         history_df = pd.DataFrame(training_results['training_history'])
@@ -631,6 +633,11 @@ def main():
                                     st.subheader("🎯 Your Personalized Recommendations")
                                     
                                     recommendations = recommendations_data['recommendations']
+                                    
+                                    unique_categories = set([rec.get('category') for rec in recommendations])
+                                    diversity_score = len(unique_categories) / len(recommendations) * 100
+                                    
+                                    st.info(f" **List Diversity Score:** {diversity_score:.0f}% ({len(unique_categories)} distinct tool categories in your Top {len(recommendations)})")
                                     
                                     for i, rec in enumerate(recommendations):
                                         with st.container():

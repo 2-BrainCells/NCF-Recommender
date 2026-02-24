@@ -33,9 +33,11 @@ def load_and_train_system(demographic_file: str, ratings_file: str, run_hpo: boo
 
         print(f"Training completed:")
         print(f" Test RMSE: {training_results['test_metrics']['rmse']:.4f}")
-        print(f" Test R²: {training_results['test_metrics']['r2']:.4f}")
+        print(f" Hit Rate@10: {training_results['test_metrics']['hit_rate_10']:.4f}") # <-- Added
+        print(f" NDCG@10: {training_results['test_metrics']['ndcg_10']:.4f}")         # <-- Added
         print(f" Precision@10: {training_results['test_metrics']['precision_10']:.4f}")
         print(f" Recall@10: {training_results['test_metrics']['recall_10']:.4f}")
+        print("=" * 50)
 
         model_path = 'dyslexia_model_optimized.pth' if run_hpo else 'dyslexia_model.pth'
         rec_system.save_model(model_path)
@@ -177,14 +179,14 @@ def analyze_system_performance(training_results: dict, hpo_results: dict = None)
     if training_results:
         metrics = training_results['test_metrics']
         print(f"Model Performance:")
+        print(f" Hit Rate@10: {metrics['hit_rate_10']:.4f}") # <-- Prioritize Ranking Metrics
+        print(f" NDCG@10: {metrics['ndcg_10']:.4f}")         # <-- Prioritize Ranking Metrics
         print(f" RMSE: {metrics['rmse']:.4f}")
-        print(f" R² Score: {metrics['r2']:.4f}")
-        print(f" MAE: {metrics['mae']:.4f}")
         print(f" Precision@10: {metrics['precision_10']:.4f}")
-        print(f" Recall@10: {metrics['recall_10']:.4f}")
-
-        quality_score = (metrics['r2'] + metrics['precision_10'] + metrics['recall_10']) / 3
-        print(f" Overall Quality Score: {quality_score:.4f}")
+        
+        # Update your quality score to prioritize ranking!
+        quality_score = (metrics['ndcg_10'] + metrics['hit_rate_10'] + metrics['precision_10']) / 3
+        print(f" Overall Ranking Quality Score: {quality_score:.4f}")
 
     if hpo_results:
         print(f"\nHyperparameter Optimization:")
@@ -250,11 +252,11 @@ def interactive_demo(rec_system: DyslexiaRecommendationSystem):
         print(f"5. Exit")
 
         try:
-            choice = input(f"\nEnter your choice (1-6): ").strip()
+            choice = input(f"\nEnter your choice (1-5): ").strip()
 
             if choice == '1':
                 user_id = int(input(f"Enter user ID (0-{rec_system.data_processor.num_users-1}): "))
-                demo_existing_user(rec_system, user_id)
+                demo_existing_user(rec_system, user_id, 3)
 
             elif choice == '2':
                 user_id = int(input(f"Enter new user ID (7000-9999): "))

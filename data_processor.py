@@ -38,23 +38,15 @@ class DataProcessor:
         return item_data
 
     def create_ratings_data(self, ratings_df: pd.DataFrame) -> pd.DataFrame:
-        """Process raw ratings matrix by handling missing values, normalizing scores, and converting to long format for machine learning."""
-        ratings_matrix = ratings_df.iloc[:, 12:].copy()
+        """Process raw ratings matrix by extracting ONLY observed explicit feedback."""
+        # FIX: Added 1: to skip the first row so it perfectly aligns with user_data
+        ratings_matrix = ratings_df.iloc[1:, 12:].copy()
         ratings_matrix = ratings_matrix.replace(['NC', 'NSU', ' '], np.nan)
         ratings_matrix = ratings_matrix.apply(pd.to_numeric, errors='coerce')
 
-        max_missing_ratio = DATA_CONFIG['max_missing_ratio']
-        max_missing_count = int(ratings_matrix.shape[1] * max_missing_ratio)
-        valid_users = ratings_matrix.isnull().sum(axis=1) <= max_missing_count
-        ratings_matrix = ratings_matrix[valid_users]
-
-        imputer = KNNImputer(n_neighbors=DATA_CONFIG['knn_neighbors'])
-        ratings_matrix = pd.DataFrame(
-            imputer.fit_transform(ratings_matrix),
-            columns=ratings_matrix.columns
-        )
-
-        ratings_matrix = ratings_matrix / DATA_CONFIG['rating_scale']
+        self.num_users = ratings_matrix.shape[0]
+        
+        # FIX: Reset the index before assigning user_id so it maps exactly to user_data's indices
         ratings_matrix.reset_index(drop=True, inplace=True)
         ratings_matrix.insert(0, 'user_id', ratings_matrix.index)
 
@@ -64,24 +56,43 @@ class DataProcessor:
             value_name='rating'
         )
 
-        # Fix: Ensure item_id mapping is consistent with num_items
-        unique_item_codes = list(ratings_matrix.columns[1:])  # Exclude user_id column
+        # Drop unobserved interactions
+        ratings_data = ratings_data.dropna(subset=['rating'])
+        
+        ratings_data['rating'] = ratings_data['rating'] / DATA_CONFIG['rating_scale']
+        ratings_data.reset_index(drop=True, inplace=True)
+
+        unique_item_codes = list(ratings_matrix.columns[1:])
         code_to_id = {code: idx for idx, code in enumerate(unique_item_codes)}
         ratings_data['item_id'] = ratings_data['item_code'].map(code_to_id)
 
-        # Validate item_ids are within expected range
-        max_item_id = ratings_data['item_id'].max()
-        if max_item_id >= self.num_items:
-            raise ValueError(f"Max item_id ({max_item_id}) exceeds num_items ({self.num_items})")
-
         ratings_data = ratings_data[['user_id', 'item_id', 'rating']].round(2)
-        ratings_data = ratings_data.dropna()
         ratings_data['user_id'] = ratings_data['user_id'].astype(int)
         ratings_data['item_id'] = ratings_data['item_id'].astype(int)
-
-        self.num_users = ratings_data['user_id'].nunique()
         
         return ratings_data
+
+
+    def extend_user_item_data(self, user_data: pd.DataFrame, item_data: pd.DataFrame,
+                            ratings_data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Align user and item feature matrices to match the structure and ordering of the ratings data."""
+        unique_users = ratings_data['user_id'].unique()
+        unique_items = ratings_data['item_id'].unique()
+
+        user_data_filtered = user_data[user_data['user_id'].isin(unique_users)]
+        item_data_filtered = item_data[item_data['item_id'].isin(unique_items)]
+
+        user_data_extended = pd.merge(ratings_data[['user_id']], user_data_filtered, on='user_id', how='left')
+        item_data_extended = pd.merge(ratings_data[['item_id']], item_data_filtered, on='item_id', how='left')
+
+        # FIX: PyTorch safety net. Fill any NaNs created by the merge with 0 to prevent network poisoning
+        user_data_extended = user_data_extended.fillna(0)
+        item_data_extended = item_data_extended.fillna(0)
+
+        user_data_extended = user_data_extended.drop('user_id', axis=1)
+        item_data_extended = item_data_extended.drop('item_id', axis=1)
+
+        return user_data_extended, item_data_extended
 
 
     def create_user_data(self, demographic_df: pd.DataFrame) -> pd.DataFrame:
@@ -159,22 +170,22 @@ class DataProcessor:
 
         return features_df
 
-    def extend_user_item_data(self, user_data: pd.DataFrame, item_data: pd.DataFrame,
-                            ratings_data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Align user and item feature matrices to match the structure and ordering of the ratings data for consistent model input."""
-        unique_users = ratings_data['user_id'].unique()
-        unique_items = ratings_data['item_id'].unique()
+    # def extend_user_item_data(self, user_data: pd.DataFrame, item_data: pd.DataFrame,
+    #                         ratings_data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    #     """Align user and item feature matrices to match the structure and ordering of the ratings data for consistent model input."""
+    #     unique_users = ratings_data['user_id'].unique()
+    #     unique_items = ratings_data['item_id'].unique()
 
-        user_data_filtered = user_data[user_data['user_id'].isin(unique_users)]
-        item_data_filtered = item_data[item_data['item_id'].isin(unique_items)]
+    #     user_data_filtered = user_data[user_data['user_id'].isin(unique_users)]
+    #     item_data_filtered = item_data[item_data['item_id'].isin(unique_items)]
 
-        user_data_extended = pd.merge(ratings_data[['user_id']], user_data_filtered, on='user_id', how='left')
-        item_data_extended = pd.merge(ratings_data[['item_id']], item_data_filtered, on='item_id', how='left')
+    #     user_data_extended = pd.merge(ratings_data[['user_id']], user_data_filtered, on='user_id', how='left')
+    #     item_data_extended = pd.merge(ratings_data[['item_id']], item_data_filtered, on='item_id', how='left')
 
-        user_data_extended = user_data_extended.drop('user_id', axis=1)
-        item_data_extended = item_data_extended.drop('item_id', axis=1)
+    #     user_data_extended = user_data_extended.drop('user_id', axis=1)
+    #     item_data_extended = item_data_extended.drop('item_id', axis=1)
 
-        return user_data_extended, item_data_extended
+    #     return user_data_extended, item_data_extended
 
     def split_data(self, user_data: pd.DataFrame, item_data: pd.DataFrame,
                   ratings_data: pd.DataFrame, validation_split: float = 0.2) -> Tuple:

@@ -55,6 +55,41 @@ def precision_recall_at_k(y_preds: np.ndarray, y_true: np.ndarray, X_test_users:
 
     return np.mean(precisions) if precisions else 0.0, np.mean(recalls) if recalls else 0.0
 
+def hit_rate_ndcg_arhr_at_k(y_preds: np.ndarray, y_true: np.ndarray, X_test_users: np.ndarray, k: int = 10, threshold: float = 0.6) -> Tuple[float, float, float]:
+    """Calculate Hit Rate@K, NDCG@K, and ARHR@K for ranking evaluation."""
+    unique_users = np.unique(X_test_users, axis=0)
+    hit_rates, ndcgs, arhrs = [], [], []
+
+    for user in unique_users:
+        user_indices = np.where((X_test_users == user).all(axis=1))[0]
+        if len(user_indices) == 0: continue
+
+        user_preds, user_true = y_preds[user_indices], y_true[user_indices]
+        relevant_indices = np.where(user_true >= threshold)[0]
+        if len(relevant_indices) == 0: continue
+
+        actual_k = min(k, len(user_preds))
+        if actual_k == 0: continue
+
+        top_k_pred_indices = np.argsort(user_preds)[-actual_k:][::-1]
+        
+        # Hit Rate
+        hits = np.intersect1d(top_k_pred_indices, relevant_indices)
+        hit_rates.append(1.0 if len(hits) > 0 else 0.0)
+
+        # NDCG & ARHR
+        dcg, arhr = 0.0, 0.0
+        for i, pred_idx in enumerate(top_k_pred_indices):
+            if pred_idx in relevant_indices:
+                dcg += 1.0 / np.log2(i + 2)
+                arhr += 1.0 / (i + 1)  # ARHR: 1 / rank
+                
+        idcg = sum([1.0 / np.log2(i + 2) for i in range(min(actual_k, len(relevant_indices)))])
+        ndcgs.append(dcg / idcg if idcg > 0 else 0.0)
+        arhrs.append(arhr)
+
+    return np.mean(hit_rates) if hit_rates else 0.0, np.mean(ndcgs) if ndcgs else 0.0, np.mean(arhrs) if arhrs else 0.0
+
 def init_data(input_data: Tuple, y: np.ndarray = None, device: str = 'cpu') -> Tuple:
     """Initialize and convert numpy arrays to PyTorch tensors with proper device placement for neural network training."""
     X_user_id, X_item_id, X_user, X_item = input_data
@@ -114,10 +149,20 @@ def evaluate_model(model: nn.Module,
     mse = mean_squared_error(targets, predictions)
     rmse = sqrt(mse)
 
+    # precision_10, recall_10 = precision_recall_at_k(
+    #     predictions, targets, X_user_test, k=10, threshold=0.6
+    # )
+    
+    # hit_rate_10, ndcg_10 = hit_rate_and_ndcg_at_k(
+    #     predictions, targets, X_user_test, k=10, threshold=0.6
+    # )
+    
     precision_10, recall_10 = precision_recall_at_k(
-        predictions, targets, X_user_test, k=10, threshold=0.6
+        predictions, targets, X_user_test, k=3, threshold=0.8
     )
-
+    
+    hit_rate_10, ndcg_10, arhr_10 = hit_rate_ndcg_arhr_at_k(predictions, targets, X_user_test, k=10, threshold=0.8)
+    
     return {
         'val_loss': val_loss,
         'r2': r2,
@@ -125,7 +170,10 @@ def evaluate_model(model: nn.Module,
         'mse': mse,
         'rmse': rmse,
         'precision_10': precision_10,
-        'recall_10': recall_10
+        'recall_10': recall_10,
+        'hit_rate_10': hit_rate_10,  
+        'ndcg_10': ndcg_10,
+        'arhr_10': arhr_10          
     }
 
 def train_model_epoch(model: nn.Module,
@@ -158,7 +206,10 @@ def train_model_epoch(model: nn.Module,
         'mse': [],
         'rmse': [],
         'precision_10': [],
-        'recall_10': []
+        'recall_10': [],
+        'hit_rate_10': [],  
+        'ndcg_10': [],
+        'arhr_10': []       
     }
 
     for epoch in range(epochs):
