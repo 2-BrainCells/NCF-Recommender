@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from sklearn.impute import KNNImputer
 from sklearn.model_selection import train_test_split
 from typing import Tuple, Dict
 import logging
@@ -38,15 +37,17 @@ class DataProcessor:
         return item_data
 
     def create_ratings_data(self, ratings_df: pd.DataFrame) -> pd.DataFrame:
-        """Process raw ratings matrix by extracting ONLY observed explicit feedback."""
-        # FIX: Added 1: to skip the first row so it perfectly aligns with user_data
+        """Process raw ratings matrix by extracting ONLY observed explicit feedback and dropping non-interactions."""
+        # Align with demographics by skipping the first row, use cols 12+ for tools
         ratings_matrix = ratings_df.iloc[1:, 12:].copy()
-        ratings_matrix = ratings_matrix.replace(['NC', 'NSU', ' '], np.nan)
+        
+        # CRITICAL FIX 1: Replace 0, '0', 'NC', 'NSU', ' ' with np.nan to avoid penalizing unseen items
+        ratings_matrix = ratings_matrix.replace(['NC', 'NSU', ' ', 0, '0', 0.0], np.nan)
         ratings_matrix = ratings_matrix.apply(pd.to_numeric, errors='coerce')
 
         self.num_users = ratings_matrix.shape[0]
         
-        # FIX: Reset the index before assigning user_id so it maps exactly to user_data's indices
+        # Reset index before assigning user_id to map exactly to user_data's indices
         ratings_matrix.reset_index(drop=True, inplace=True)
         ratings_matrix.insert(0, 'user_id', ratings_matrix.index)
 
@@ -56,9 +57,8 @@ class DataProcessor:
             value_name='rating'
         )
 
-        # Drop unobserved interactions
+        # Drop missing values to create a true sparse matrix (Fixes 94% density issue)
         ratings_data = ratings_data.dropna(subset=['rating'])
-        
         ratings_data['rating'] = ratings_data['rating'] / DATA_CONFIG['rating_scale']
         ratings_data.reset_index(drop=True, inplace=True)
 
@@ -69,34 +69,12 @@ class DataProcessor:
         ratings_data = ratings_data[['user_id', 'item_id', 'rating']].round(2)
         ratings_data['user_id'] = ratings_data['user_id'].astype(int)
         ratings_data['item_id'] = ratings_data['item_id'].astype(int)
-        
+
         return ratings_data
 
-
-    def extend_user_item_data(self, user_data: pd.DataFrame, item_data: pd.DataFrame,
-                            ratings_data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """Align user and item feature matrices to match the structure and ordering of the ratings data."""
-        unique_users = ratings_data['user_id'].unique()
-        unique_items = ratings_data['item_id'].unique()
-
-        user_data_filtered = user_data[user_data['user_id'].isin(unique_users)]
-        item_data_filtered = item_data[item_data['item_id'].isin(unique_items)]
-
-        user_data_extended = pd.merge(ratings_data[['user_id']], user_data_filtered, on='user_id', how='left')
-        item_data_extended = pd.merge(ratings_data[['item_id']], item_data_filtered, on='item_id', how='left')
-
-        # FIX: PyTorch safety net. Fill any NaNs created by the merge with 0 to prevent network poisoning
-        user_data_extended = user_data_extended.fillna(0)
-        item_data_extended = item_data_extended.fillna(0)
-
-        user_data_extended = user_data_extended.drop('user_id', axis=1)
-        item_data_extended = item_data_extended.drop('item_id', axis=1)
-
-        return user_data_extended, item_data_extended
-
-
-    def create_user_data(self, demographic_df: pd.DataFrame) -> pd.DataFrame:
-        """Transform raw demographic survey data into structured user profiles with age calculation and missing value handling."""
+    def create_user_data(self, demographic_df: pd.DataFrame, ratings_df: pd.DataFrame) -> pd.DataFrame:
+        """Transform demographics and P1-P12 learning difficulties into structured user profiles."""
+        # 1. Process standard demographics
         birth_year_mode = demographic_df['Anno di nascita'].mode()[0]
         demographic_df['Anno di nascita'] = demographic_df['Anno di nascita'].fillna(birth_year_mode)
 
@@ -117,18 +95,31 @@ class DataProcessor:
         ]]
 
         current_year = datetime.now().year
-        user_data['age'] = current_year - user_data['birth_year'].astype(int)
+        user_data['age'] = current_year - pd.to_numeric(user_data['birth_year'], errors='coerce').fillna(current_year-20)
         user_data = user_data.drop('birth_year', axis=1)
-
         user_data['other_difficulties_details'] = user_data['other_difficulties_details'].fillna('Nessuno')
-
+        
         user_data.reset_index(drop=True, inplace=True)
+
+        # 2. CRITICAL FIX 2: Extract P1-P12 Learning Difficulties
+        # Align rows by skipping the first row of ratings_df
+        p_features = ratings_df.iloc[1:, :12].copy()
+        
+        # Convert to numeric, replace non-numeric with NaN, fill with 0 (assuming 0 = no reported difficulty)
+        p_features = p_features.apply(pd.to_numeric, errors='coerce').fillna(0)
+        p_features.reset_index(drop=True, inplace=True)
+        
+        # Prefix columns to easily identify them as learning difficulty metrics
+        p_features.columns = [f"learning_diff_{col}" for col in p_features.columns]
+
+        # 3. Concatenate Demographics + P1-P12
+        user_data = pd.concat([user_data, p_features], axis=1)
         user_data.insert(0, 'user_id', user_data.index)
 
-        self.diagnosis_categories = sorted(user_data['diagnosis_timing'].unique())
-        self.other_categories = sorted(user_data['has_other_difficulties'].unique())
-        self.answer_categories = sorted(user_data['other_difficulties_details'].unique())
-        self.family_categories = sorted(user_data['family_history'].unique())
+        self.diagnosis_categories = sorted(user_data['diagnosis_timing'].astype(str).unique())
+        self.other_categories = sorted(user_data['has_other_difficulties'].astype(str).unique())
+        self.answer_categories = sorted(user_data['other_difficulties_details'].astype(str).unique())
+        self.family_categories = sorted(user_data['family_history'].astype(str).unique())
 
         return user_data
 
@@ -147,7 +138,7 @@ class DataProcessor:
     def extract_user_category_preferences(self, user_data: pd.DataFrame,
                                         item_data: pd.DataFrame,
                                         ratings_data: pd.DataFrame) -> pd.DataFrame:
-        """Calculate user preference scores for each item category based on historical rating patterns with exponential penalty for sparse interactions."""
+        """Calculate user preference scores for each item category based on historical rating patterns."""
         features_df = user_data.copy()
 
         def exponential_penalty(count, decay_factor=DATA_CONFIG['exponential_decay_factor']):
@@ -170,26 +161,30 @@ class DataProcessor:
 
         return features_df
 
-    # def extend_user_item_data(self, user_data: pd.DataFrame, item_data: pd.DataFrame,
-    #                         ratings_data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    #     """Align user and item feature matrices to match the structure and ordering of the ratings data for consistent model input."""
-    #     unique_users = ratings_data['user_id'].unique()
-    #     unique_items = ratings_data['item_id'].unique()
+    def extend_user_item_data(self, user_data: pd.DataFrame, item_data: pd.DataFrame,
+                            ratings_data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Align user and item feature matrices to match the structure and ordering of the ratings data."""
+        unique_users = ratings_data['user_id'].unique()
+        unique_items = ratings_data['item_id'].unique()
 
-    #     user_data_filtered = user_data[user_data['user_id'].isin(unique_users)]
-    #     item_data_filtered = item_data[item_data['item_id'].isin(unique_items)]
+        user_data_filtered = user_data[user_data['user_id'].isin(unique_users)]
+        item_data_filtered = item_data[item_data['item_id'].isin(unique_items)]
 
-    #     user_data_extended = pd.merge(ratings_data[['user_id']], user_data_filtered, on='user_id', how='left')
-    #     item_data_extended = pd.merge(ratings_data[['item_id']], item_data_filtered, on='item_id', how='left')
+        user_data_extended = pd.merge(ratings_data[['user_id']], user_data_filtered, on='user_id', how='left')
+        item_data_extended = pd.merge(ratings_data[['item_id']], item_data_filtered, on='item_id', how='left')
 
-    #     user_data_extended = user_data_extended.drop('user_id', axis=1)
-    #     item_data_extended = item_data_extended.drop('item_id', axis=1)
+        # CRITICAL FIX 3: PyTorch safety net. Fill any NaNs created by the merge with 0 to prevent network poisoning
+        user_data_extended = user_data_extended.fillna(0)
+        item_data_extended = item_data_extended.fillna(0)
 
-    #     return user_data_extended, item_data_extended
+        user_data_extended = user_data_extended.drop('user_id', axis=1)
+        item_data_extended = item_data_extended.drop('item_id', axis=1)
+
+        return user_data_extended, item_data_extended
 
     def split_data(self, user_data: pd.DataFrame, item_data: pd.DataFrame,
                   ratings_data: pd.DataFrame, validation_split: float = 0.2) -> Tuple:
-        """Partition dataset into training, validation, and test sets while maintaining data consistency across user features, item features, and ratings."""
+        """Partition dataset into training, validation, and test sets."""
         train_ratings, temp_ratings = train_test_split(ratings_data, test_size=0.2, random_state=42)
         val_ratings, test_ratings = train_test_split(temp_ratings, test_size=0.5, random_state=42)
 
@@ -217,7 +212,7 @@ class DataProcessor:
 
     def preprocess_data(self, demographic_df: pd.DataFrame,
                        ratings_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """Execute complete data preprocessing pipeline from raw CSV files to machine learning ready feature matrices and rating tensors."""
+        """Execute complete data preprocessing pipeline from raw CSV files to machine learning ready tensors."""
         self.logger.info("Starting data preprocessing...")
 
         item_data = self.create_item_data(ratings_df)
@@ -226,7 +221,8 @@ class DataProcessor:
         ratings_data = self.create_ratings_data(ratings_df)
         self.logger.info(f"Created ratings data: {len(ratings_data)} ratings")
 
-        user_data = self.create_user_data(demographic_df)
+        # Now passes both dataframes so P1-P12 can be scraped
+        user_data = self.create_user_data(demographic_df, ratings_df)
         self.logger.info(f"Created user data: {len(user_data)} users")
 
         user_data = self.encode_user_features(user_data)

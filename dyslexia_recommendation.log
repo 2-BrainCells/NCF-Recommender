@@ -388,3 +388,55 @@
 2026-02-24 21:11:50,407 - recommendation_system - INFO - User 35: Found 10 similar users
 2026-02-24 21:11:58,941 - recommendation_system - INFO - User 4655 - Existing: False
 2026-02-24 21:12:04,690 - recommendation_system - INFO - User 6755 - Existing: False
+2026-02-24 21:41:26,574 - recommendation_system - INFO - Loading data files...
+2026-02-24 21:41:26,606 - data_processor - INFO - Starting data preprocessing...
+2026-02-24 21:41:26,607 - data_processor - INFO - Created item data: 39 items
+2026-02-24 21:41:26,645 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-02-24 21:41:26,663 - data_processor - INFO - Created user data: 1216 users
+2026-02-24 21:41:26,672 - recommendation_system - ERROR - Error loading data: 'category'
+2026-02-24 21:43:31,849 - recommendation_system - INFO - Loading data files...
+2026-02-24 21:43:31,906 - data_processor - INFO - Starting data preprocessing...
+2026-02-24 21:43:31,908 - data_processor - INFO - Created item data: 39 items
+2026-02-24 21:43:31,943 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-02-24 21:43:31,953 - data_processor - INFO - Created user data: 1216 users
+2026-02-24 21:43:32,214 - data_processor - INFO - Final data shapes - Users: (40034, 93), Items: (40034, 27), Ratings: (40034, 3)
+2026-02-24 21:43:32,214 - recommendation_system - INFO - Data loaded successfully: 40034 users, 40034 items, 40034 ratings
+2026-02-24 21:43:32,215 - recommendation_system - INFO - Starting model training...
+2026-02-24 21:43:32,253 - recommendation_system - INFO - Model dimensions - Users: 1215, Items: 39, User features: 93, Item features: 27
+2026-02-24 21:44:01,337 - recommendation_system - INFO - Training completed. Test RMSE: 0.2119
+2026-02-24 21:44:01,567 - recommendation_system - INFO - Model and data saved to dyslexia_model.pth
+2026-02-24 21:44:01,569 - recommendation_system - INFO - User 7000 - Existing: False
+2026-02-24 21:44:01,607 - recommendation_system - INFO - User 8000 - Existing: False
+2026-02-24 21:44:01,666 - recommendation_system - INFO - User 400 - Existing: True
+2026-02-24 21:44:01,668 - recommendation_system - INFO - User 400: 13 high-rated items out of 29 total
+2026-02-24 21:44:01,669 - recommendation_system - INFO - User 400 preferred categories: [('Self-made Study Aids', np.float64(6.5)), ('Text Structuring Tools', np.float64(6.0)), ('Active Reading Markup', np.float64(6.0)), ('Assistive Writing Tools', np.float64(5.5)), ('Personal Reader Support', np.float64(5.5))]
+2026-02-24 21:44:02,185 - recommendation_system - INFO - User 400: Found 10 similar users
+2026-02-24 21:46:29,232 - recommendation_system - INFO - User 45 - Existing: True
+2026-02-24 21:46:29,234 - recommendation_system - INFO - User 45: 28 high-rated items out of 38 total
+2026-02-24 21:46:29,235 - recommendation_system - INFO - User 45 preferred categories: [('Digital Tutor', np.float64(5.5)), ('Supplementary Research', np.float64(5.5)), ('Classroom Support Aids', np.float64(5.5)), ('Assessment Adaptation', np.float64(5.5)), ('Written Assessment', np.float64(5.5))]
+2026-02-24 21:46:30,180 - recommendation_system - INFO - User 45: Found 10 similar users
+2026-02-24 21:46:48,717 - recommendation_system - INFO - User 5654 - Existing: False
+2026-02-24 21:46:58,329 - recommendation_system - INFO - User 5678 - Existing: False
+2026-02-24 21:49:09,251 - recommendation_system - INFO - Loading data files...
+2026-02-24 21:49:09,283 - data_processor - INFO - Starting data preprocessing...
+2026-02-24 21:49:09,284 - data_processor - INFO - Created item data: 39 items
+2026-02-24 21:49:09,327 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-02-24 21:49:09,338 - data_processor - INFO - Created user data: 1216 users
+2026-02-24 21:49:09,565 - data_processor - INFO - Final data shapes - Users: (40034, 93), Items: (40034, 27), Ratings: (40034, 3)
+2026-02-24 21:49:09,566 - recommendation_system - INFO - Data loaded successfully: 40034 users, 40034 items, 40034 ratings
+2026-02-24 21:49:09,567 - recommendation_system - INFO - Starting model training...
+2026-02-24 21:49:09,604 - recommendation_system - INFO - Model dimensions - Users: 1215, Items: 39, User features: 93, Item features: 27
+2026-02-24 21:49:34,747 - recommendation_system - INFO - Training completed. Test RMSE: 0.2157
+2026-02-24 21:49:34,967 - recommendation_system - INFO - Model and data saved to dyslexia_model.pth
+2026-02-24 21:49:34,969 - recommendation_system - INFO - User 7000 - Existing: False
+2026-02-24 21:49:35,033 - recommendation_system - INFO - User 8000 - Existing: False
+2026-02-24 21:49:35,110 - recommendation_system - INFO - User 400 - Existing: True
+2026-02-24 21:49:35,113 - recommendation_system - INFO - User 400: 13 high-rated items out of 29 total
+2026-02-24 21:49:35,117 - recommendation_system - INFO - User 400 preferred categories: [('Self-made Study Aids', np.float64(6.5)), ('Text Structuring Tools', np.float64(6.0)), ('Active Reading Markup', np.float64(6.0)), ('Assistive Writing Tools', np.float64(5.5)), ('Personal Reader Support', np.float64(5.5))]
+2026-02-24 21:49:35,781 - recommendation_system - INFO - User 400: Found 10 similar users
+2026-02-24 21:53:20,230 - recommendation_system - INFO - User 23 - Existing: True
+2026-02-24 21:53:20,232 - recommendation_system - INFO - User 23: 19 high-rated items out of 28 total
+2026-02-24 21:53:20,234 - recommendation_system - INFO - User 23 preferred categories: [('Visual Memory Aids', np.float64(6.0)), ('Classroom Support Aids', np.float64(6.0)), ('Color-Coded Text', np.float64(5.5)), ('Assistive Writing Tools', np.float64(5.5)), ('Text Structuring Tools', np.float64(5.5))]
+2026-02-24 21:53:20,885 - recommendation_system - INFO - User 23: Found 10 similar users
+2026-02-24 21:53:25,405 - recommendation_system - INFO - User 6887 - Existing: False
+2026-02-24 21:53:34,898 - recommendation_system - INFO - User 6887 - Existing: False
