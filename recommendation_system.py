@@ -12,7 +12,7 @@ from config import SYSTEM_CONFIG, LOGGING_CONFIG, DEVICE, CATEGORY_MAPPING
 from data_processor import DataProcessor
 from model import NeuralCollaborativeFiltering, TrainingEarlyStopping as EarlyStopping
 from hpo import HyperparameterOptimizer
-from utils import train_model_epoch, evaluate_model, get_popular_items, validate_embedding_indices
+from utils import train_model_epoch, evaluate_model, get_popular_items, validate_embedding_indices, generate_multi_k_evaluation_table 
 
 class DyslexiaRecommendationSystem:
     """Comprehensive recommendation system for dyslexic learners providing personalized learning tool suggestions based on user profiles and collaborative filtering."""
@@ -174,12 +174,14 @@ class DyslexiaRecommendationSystem:
             with torch.no_grad():
                 # Get raw model predictions
                 predictions = self.model(user_ids_tensor, item_ids_tensor, X_user_tensor, X_item_tensor).cpu().numpy()
+                
+            user_ids_np = user_ids_tensor.cpu().numpy()
+            item_ids_np = item_ids_tensor.cpu().numpy()
             
             # Get final RMSE from history (or default to 0.0 if not found)
             final_rmse = training_history['rmse'][-1] if 'rmse' in training_history and training_history['rmse'] else 0.0
 
             # Import the new function dynamically to avoid circular imports
-            from utils import generate_multi_k_evaluation_table
             
             # Safely grab dataframes and threshold
             item_df = getattr(self.data_processor, 'item_data', pd.DataFrame({'item_id': range(39)}))
@@ -191,11 +193,12 @@ class DyslexiaRecommendationSystem:
                 y_preds=predictions, 
                 y_true=targets, 
                 X_test_users=X_user_test, 
-                item_data=item_df,
-                ratings_data=ratings_df,
+                user_ids=user_ids_np,               # Passed to map unique users
+                item_ids=item_ids_np,               # Passed to map items
+                data_processor=self.data_processor, # Passed to fetch CATEGORY mappings
                 rmse=final_rmse,
                 k_values=[3, 5, 10],
-                threshold=threshold
+                threshold=config.get('hit_threshold', 0.5)
             )
             
             training_history['multi_k_metrics'] = table_metrics

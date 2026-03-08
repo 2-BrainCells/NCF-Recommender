@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
 from math import sqrt, log2
 from typing import Dict, List, Tuple
+from config import CATEGORY_MAPPING
 import sys
 import os
 
@@ -313,61 +314,62 @@ def validate_embedding_indices(ratings_data: pd.DataFrame, num_users: int, num_i
 
     return True
 
-def calculate_advanced_metrics_at_k(y_preds: np.ndarray, y_true: np.ndarray, 
-                                  X_test_users: np.ndarray, item_data: pd.DataFrame, 
-                                  train_data: pd.DataFrame, k: int = 10) -> Tuple[float, float, float]:
-    """Calculate Diversity, Novelty, and Coverage at K for recommendation lists."""
-    unique_users = np.unique(X_test_users, axis=0)
+def calculate_advanced_metrics_at_k(y_preds: np.ndarray, user_ids: np.ndarray, item_ids: np.ndarray, 
+                                  data_processor, k: int = 10) -> Tuple[float, float, float]:
+    """Calculate Category Diversity, Novelty, and Global Coverage at K."""
+    unique_users = np.unique(user_ids)
     
-    # Precompute for Novelty and Diversity
-    total_users = len(train_data['user_id'].unique())
-    item_popularity = train_data.groupby('item_id').size().to_dict()
-    total_items = len(item_data)
+    # FIX 1: Coverage Base (Forces exactly 39 items)
+    total_items = data_processor.num_items
+    total_users = data_processor.num_users
     
-    # Map item indices to categories (assuming item_data has one-hot encoded categories or a 'category' column)
-    # We will approximate category diversity by looking at the raw item indices if category isn't directly passed
+    item_popularity = data_processor.ratings_data.groupby('item_id').size().to_dict()
     
     recommended_items_global = set()
     novelty_scores = []
     diversity_scores = []
-
-    for user in unique_users:
-        user_indices = np.where((X_test_users == user).all(axis=1))[0]
-        if len(user_indices) == 0: continue
-
-        user_preds = y_preds[user_indices]
+    
+    for u in unique_users:
+        user_mask = (user_ids == u)
+        user_preds = y_preds[user_mask]
+        user_items = item_ids[user_mask]
+        
         actual_k = min(k, len(user_preds))
         if actual_k == 0: continue
-
-        # Get top K recommended item indices for this user
-        top_k_indices = np.argsort(user_preds)[-actual_k:][::-1]
+        
+        # Sort by prediction score descending to get actual item IDs
+        top_indices = np.argsort(user_preds)[-actual_k:][::-1]
+        top_k_items = user_items[top_indices]
         
         # 1. Coverage tracking
-        recommended_items_global.update(top_k_indices)
+        recommended_items_global.update(top_k_items)
         
         # 2. Novelty (Inverse Popularity)
         list_novelty = 0.0
-        for item_idx in top_k_indices:
-            # How many times was this item interacted with in training?
-            pop = item_popularity.get(item_idx, 1) # Default to 1 to avoid log(0)
-            # Self-Information: -log2(probability of item)
+        for item in top_k_items:
+            pop = item_popularity.get(item, 1)
             item_novelty = -log2(pop / total_users) if total_users > 0 else 0
             list_novelty += item_novelty
         novelty_scores.append(list_novelty / actual_k)
         
-        # 3. Diversity (Simplified intra-list uniqueness)
-        # In a full setup, this checks category uniqueness. Here we measure item spread.
-        diversity_scores.append(len(set(top_k_indices)) / actual_k)
+        # FIX 2: Category Diversity (Intra-List Diversity)
+        categories = set()
+        for item in top_k_items:
+            item_code = data_processor.item_id_to_code.get(item, f"Unknown_{item}")
+            cat = CATEGORY_MAPPING.get(item_code, 'Other')
+            categories.add(cat)
+            
+        # Diversity score: Ratio of unique categories to K
+        diversity_scores.append(len(categories) / actual_k)
 
-    # Calculate final averages
-    avg_novelty = np.mean(novelty_scores) if novelty_scores else 0.0
     avg_diversity = np.mean(diversity_scores) if diversity_scores else 0.0
+    avg_novelty = np.mean(novelty_scores) if novelty_scores else 0.0
     coverage = len(recommended_items_global) / total_items if total_items > 0 else 0.0
 
-    return float(avg_diversity), float(avg_novelty), float(coverage)
+    return avg_diversity, avg_novelty, coverage
 
 def generate_multi_k_evaluation_table(y_preds: np.ndarray, y_true: np.ndarray, X_test_users: np.ndarray, 
-                                      item_data: pd.DataFrame, ratings_data: pd.DataFrame, 
+                                      user_ids: np.ndarray, item_ids: np.ndarray, data_processor, 
                                       rmse: float, k_values: List[int] = [3, 5, 10], threshold: float = 0.5):
     """Generate and print a research-paper formatted ASCII table for Multi-K evaluation."""
     
@@ -377,12 +379,12 @@ def generate_multi_k_evaluation_table(y_preds: np.ndarray, y_true: np.ndarray, X
     }
     
     for k in k_values:
-        # Get standard ranking metrics
+        # Standard metrics
         hit, ndcg, arhr = hit_rate_ndcg_arhr_at_k(y_preds, y_true, X_test_users, k=k, threshold=threshold)
         precision, recall = precision_recall_at_k(y_preds, y_true, X_test_users, k=k, threshold=threshold)
         
-        # Get advanced metrics
-        div, nov, cov = calculate_advanced_metrics_at_k(y_preds, y_true, X_test_users, item_data, ratings_data, k=k)
+        # Advanced metrics (Now correctly uses item_ids and maps to categories)
+        div, nov, cov = calculate_advanced_metrics_at_k(y_preds, user_ids, item_ids, data_processor, k=k)
         
         metrics_dict['Hit Rate@K'].append(hit)
         metrics_dict['Precision@K'].append(precision)
@@ -393,6 +395,7 @@ def generate_multi_k_evaluation_table(y_preds: np.ndarray, y_true: np.ndarray, X
         metrics_dict['Novelty'].append(nov)
         metrics_dict['Coverage'].append(cov)
 
+    # Print the ASCII Table
     print("\n🏆 MULTI-K EVALUATION SUMMARY (HYBRID NCF)")
     print("=" * 80)
     header = f"{'Metric':<15} | " + " | ".join([f"K={k:<8}" for k in k_values])

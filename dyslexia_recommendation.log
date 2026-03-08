@@ -636,3 +636,47 @@
 2026-03-08 16:32:00,938 - recommendation_system - INFO - User 0 preferred categories: [('Multimedia Lesson Recording', np.float64(6.0)), ('Classroom Support Aids', np.float64(6.0)), ('Tutoring Support', np.float64(5.5)), ('Peer Association', np.float64(5.5)), ('Online Lessons', np.float64(5.5))]
 2026-03-08 16:32:01,891 - recommendation_system - INFO - User 0: Found 10 similar users
 2026-03-08 16:35:22,855 - recommendation_system - INFO - User 7000 - Existing: False
+2026-03-08 16:40:29,564 - recommendation_system - INFO - Loading data files...
+2026-03-08 16:40:29,714 - data_processor - INFO - Starting data preprocessing...
+2026-03-08 16:40:29,714 - data_processor - INFO - Created item data: 39 items
+2026-03-08 16:40:29,804 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-03-08 16:40:29,821 - data_processor - INFO - Created user data: 1216 users
+2026-03-08 16:40:30,381 - data_processor - INFO - Final data shapes - Users: (40034, 93), Items: (40034, 27), Ratings: (40034, 3)
+2026-03-08 16:40:30,382 - recommendation_system - INFO - Data loaded successfully: 40034 users, 40034 items, 40034 ratings
+2026-03-08 16:40:34,496 - data_processor - INFO - Generating Leave-One-Out (LOO) splits & Negative Samples...
+2026-03-08 16:42:03,814 - recommendation_system - INFO - Model and data saved to complete_dyslexia_model.pth
+2026-03-08 16:42:18,318 - recommendation_system - INFO - User 0 - Existing: True
+2026-03-08 16:42:18,321 - recommendation_system - INFO - User 0: 12 high-rated items out of 23 total
+2026-03-08 16:42:18,324 - recommendation_system - INFO - User 0 preferred categories: [('Multimedia Lesson Recording', np.float64(6.0)), ('Classroom Support Aids', np.float64(6.0)), ('Tutoring Support', np.float64(5.5)), ('Peer Association', np.float64(5.5)), ('Online Lessons', np.float64(5.5))]
+2026-03-08 16:42:19,325 - recommendation_system - INFO - User 0: Found 10 similar users
+2026-03-08 16:42:26,402 - recommendation_system - INFO - User 7000 - Existing: False
+2026-03-08 16:42:41,689 - recommendation_system - INFO - User 7000 - Existing: False
+2026-03-08 16:42:58,361 - recommendation_system - INFO - User 7000 - Existing: False
+2026-03-08 16:43:09,627 - recommendation_system - INFO - User 7000 - Existing: False
+2026-03-08 16:45:47,754 - recommendation_system - INFO - Loading data files...
+2026-03-08 16:45:47,826 - data_processor - INFO - Starting data preprocessing...
+2026-03-08 16:45:47,830 - data_processor - INFO - Created item data: 39 items
+2026-03-08 16:45:47,908 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-03-08 16:45:47,923 - data_processor - INFO - Created user data: 1216 users
+2026-03-08 16:45:48,327 - data_processor - INFO - Final data shapes - Users: (40034, 93), Items: (40034, 27), Ratings: (40034, 3)
+2026-03-08 16:45:48,327 - recommendation_system - INFO - Data loaded successfully: 40034 users, 40034 items, 40034 ratings
+2026-03-08 16:45:48,329 - recommendation_system - INFO - Starting model training...
+2026-03-08 16:45:48,329 - data_processor - INFO - Generating Leave-One-Out (LOO) splits & Negative Samples...
+2026-03-08 16:47:50,272 - recommendation_system - INFO - Generating Multi-K Evaluation Table...
+2026-03-08 16:47:58,660 - recommendation_system - INFO - Model and data saved to dyslexia_model.pth
+2026-03-08 16:47:58,662 - recommendation_system - INFO - User 7000 - Existing: False
+2026-03-08 16:47:58,718 - recommendation_system - INFO - User 8000 - Existing: False
+2026-03-08 16:47:58,804 - recommendation_system - INFO - User 400 - Existing: True
+2026-03-08 16:47:58,807 - recommendation_system - INFO - User 400: 13 high-rated items out of 29 total
+2026-03-08 16:47:58,808 - recommendation_system - INFO - User 400 preferred categories: [('Self-made Study Aids', np.float64(6.5)), ('Text Structuring Tools', np.float64(6.0)), ('Active Reading Markup', np.float64(6.0)), ('Assistive Writing Tools', np.float64(5.5)), ('Personal Reader Support', np.float64(5.5))]
+2026-03-08 16:47:59,431 - recommendation_system - INFO - User 400: Found 10 similar users
+2026-03-08 16:54:16,996 - recommendation_system - INFO - Loading data files...
+2026-03-08 16:54:17,059 - data_processor - INFO - Starting data preprocessing...
+2026-03-08 16:54:17,065 - data_processor - INFO - Created item data: 39 items
+2026-03-08 16:54:17,124 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-03-08 16:54:17,146 - data_processor - INFO - Created user data: 1216 users
+2026-03-08 16:54:17,535 - data_processor - INFO - Final data shapes - Users: (40034, 93), Items: (40034, 27), Ratings: (40034, 3)
+2026-03-08 16:54:17,535 - recommendation_system - INFO - Data loaded successfully: 40034 users, 40034 items, 40034 ratings
+2026-03-08 16:54:17,535 - recommendation_system - INFO - Starting model training...
+2026-03-08 16:54:17,535 - data_processor - INFO - Generating Leave-One-Out (LOO) splits & Negative Samples...
+2026-03-08 16:55:55,498 - recommendation_system - INFO - Generating Multi-K Evaluation Table...
