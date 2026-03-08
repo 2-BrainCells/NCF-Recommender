@@ -10,7 +10,7 @@ import time
 warnings.filterwarnings('ignore')
 
 from recommendation_system import DyslexiaRecommendationSystem
-from config import CATEGORY_MAPPING, DEFAULT_CONFIG
+from config import CATEGORY_MAPPING, SYSTEM_CONFIG
 
 st.set_page_config(
     page_title="🧠 Dyslexia Learning Tools Recommender",
@@ -92,12 +92,12 @@ def train_model_with_real_progress(rec_system, epochs=20):
     try:
         start_time = time.time()
         
-        rec_system.embedding_dims = DEFAULT_CONFIG['embedding_dims']
-        rec_system.hidden_dims = DEFAULT_CONFIG['hidden_dims']
-        rec_system.dropout = DEFAULT_CONFIG['dropout']
-        rec_system.learning_rate = DEFAULT_CONFIG['learning_rate']
-        rec_system.weight_decay = DEFAULT_CONFIG['weight_decay']
-        rec_system.batch_size = DEFAULT_CONFIG['batch_size']
+        rec_system.embedding_dims = SYSTEM_CONFIG['embedding_dims']
+        rec_system.hidden_dims = SYSTEM_CONFIG['hidden_dims']
+        rec_system.dropout = SYSTEM_CONFIG['dropout']
+        rec_system.learning_rate = SYSTEM_CONFIG['learning_rate']
+        rec_system.weight_decay = SYSTEM_CONFIG['weight_decay']
+        rec_system.batch_size = SYSTEM_CONFIG['batch_size']
         
         status_text.text("🔧 Preparing data...")
         progress_bar.progress(0.05)
@@ -132,7 +132,8 @@ def train_model_with_real_progress(rec_system, epochs=20):
         
         rec_system.model.to(rec_system.device)
         
-        criterion = torch.nn.MSELoss()
+        # Switch to BCELoss to match the backend
+        criterion = torch.nn.BCELoss()
         optimizer = torch.optim.Adam(
             rec_system.model.parameters(),
             lr=rec_system.learning_rate,
@@ -410,20 +411,20 @@ def main():
                 col1, col2 = st.columns(2)
                 with col1:
                     st.json({
-                        "embedding_dims": DEFAULT_CONFIG['embedding_dims'],
-                        "hidden_dims": DEFAULT_CONFIG['hidden_dims'],
-                        "dropout": DEFAULT_CONFIG['dropout'],
-                        "learning_rate": DEFAULT_CONFIG['learning_rate']
+                        "embedding_dims": SYSTEM_CONFIG['embedding_dims'],
+                        "hidden_dims": SYSTEM_CONFIG['hidden_dims'],
+                        "dropout": SYSTEM_CONFIG['dropout'],
+                        "learning_rate": SYSTEM_CONFIG['learning_rate']
                     })
                 with col2:
                     st.json({
-                        "weight_decay": DEFAULT_CONFIG['weight_decay'],
-                        "batch_size": DEFAULT_CONFIG['batch_size'],
-                        "epochs": DEFAULT_CONFIG['epochs']
+                        "weight_decay": SYSTEM_CONFIG['weight_decay'],
+                        "batch_size": SYSTEM_CONFIG['batch_size'],
+                        "epochs": SYSTEM_CONFIG['epochs']
                     })
             
             if st.button("🚀 Train Model", type="primary"):
-                training_results = train_model_with_real_progress(rec_system, DEFAULT_CONFIG['epochs'])
+                training_results = train_model_with_real_progress(rec_system, SYSTEM_CONFIG['epochs'])
                 
                 if training_results:
                     st.session_state.model_trained = True
@@ -456,147 +457,146 @@ def main():
         
         if not st.session_state.data_loaded:
             st.warning("⚠️ Please load data first in the System Setup tab.")
-            return
-        
-        if not st.session_state.model_trained:
+        elif not st.session_state.model_trained:
             st.warning("⚠️ Please train the model first in the System Setup tab.")
-            return
-        
-        st.subheader("🎯 Select User Type")
-        
-        user_type = st.selectbox(
-            "Choose user type:",
-            ["existing_user", "new_user_with_preference", "new_user_without_preference"],
-            format_func=lambda x: {
-                "new_user_with_preference": "🆕 New User with Preferences",
-                "new_user_without_preference": "🆕 New User without Preferences",
-                "existing_user": "👤 Existing User"
-            }[x]
-        )
-        
-        if user_type == "existing_user":
-            st.subheader("👤 Existing User Recommendations")
-            st.info("Enter your User ID to get personalized recommendations based on your preferences")
+        else:
+            st.subheader("🎯 Select User Type")
             
-            user_id = st.number_input(
-                "Your User ID",
-                min_value=0,
-                max_value=1204,
-                value=0,
-                step=1,
-                help="Enter your user ID (0-1204)"
+            user_type = st.selectbox(
+                "Choose user type:",
+                ["existing_user", "new_user_with_preference", "new_user_without_preference"],
+                format_func=lambda x: {
+                    "new_user_with_preference": "🆕 New User with Preferences",
+                    "new_user_without_preference": "🆕 New User without Preferences",
+                    "existing_user": "👤 Existing User"
+                }[x]
             )
             
-            if user_id >= 0:
-                user_info = get_user_info(rec_system, user_id) if st.session_state.model_trained else None
+            if user_type == "existing_user":
+                st.subheader("👤 Existing User Recommendations")
+                st.info("Enter your User ID to get personalized recommendations based on your preferences")
                 
-                if user_info and user_info is not None:
-                    st.success(f"✅ User {user_id} found with {user_info['stats']['total_ratings']} ratings")
-                elif user_id > 0:
-                    st.error(f"❌ User {user_id} not found in the system")
-            
-            if st.button("🎯 Get My Recommendations", type="primary"):
-                user_profile = {'id': user_id}
+                user_id = st.number_input(
+                    "Your User ID",
+                    min_value=0,
+                    max_value=1204,
+                    value=0,
+                    step=1,
+                    help="Enter your user ID (0-1204)"
+                )
                 
-                with st.spinner("Analyzing your preferences and generating recommendations..."):
-                    try:
-                        recommendations_json = rec_system.get_recommendations(user_profile, top_k=10)
-                        recommendations_data = json.loads(recommendations_json)
+                if user_id >= 0:
+                    user_info = get_user_info(rec_system, user_id) if st.session_state.model_trained else None
+                    
+                    if user_info and user_info is not None:
+                        st.success(f"✅ User {user_id} found with {user_info['stats']['total_ratings']} ratings")
+                    elif user_id > 0:
+                        st.error(f"❌ User {user_id} not found in the system")
+                
+                if st.button("🎯 Get My Recommendations", type="primary"):
+                    user_profile = {'id': user_id}
+                    
+                    with st.spinner("Analyzing your preferences and generating recommendations..."):
+                        try:
+                            recommendations_json = rec_system.get_recommendations(user_profile, top_k=10)
+                            recommendations_data = json.loads(recommendations_json)
+                            
+                            if 'error' in recommendations_data:
+                                st.error(f"Error: {recommendations_data['error']}")
+                            else:
+                                if user_info:
+                                    st.header(f"👤 User {user_id} Profile")
+                                    
+                                    col1, col2, col3, col4 = st.columns(4)
+                                    with col1:
+                                        st.metric("Total Ratings", user_info['stats']['total_ratings'])
+                                    with col2:
+                                        st.metric("Average Rating", f"{user_info['stats']['avg_rating']}/5.0")
+                                    with col3:
+                                        quality = user_info['preference_quality']
+                                        quality_emoji = "🔥" if quality == 'high' else "👍" if quality == 'moderate' else "📈"
+                                        st.metric("Preference Quality", f"{quality_emoji} {quality.title()}")
+                                    with col4:
+                                        st.metric("Categories Explored", len(user_info['category_preferences']))
+                                    
+                                    if user_info['top_items']:
+                                        st.subheader("⭐ Your Highly Rated Items")
+                                        for item in user_info['top_items'][:5]:
+                                            st.markdown(f"- **{item['item_code']}** ({item['category']}): {item['rating']}/5.0")
+                                    
+                                    if user_info['category_preferences']:
+                                        st.subheader("📊 Your Category Preferences")
+                                        for category, data in list(user_info['category_preferences'].items())[:10]:
+                                            st.markdown(f"- **{category}**: {data['average_rating']}/5.0 ({data['items_rated']} items)")
                         
-                        if 'error' in recommendations_data:
-                            st.error(f"Error: {recommendations_data['error']}")
-                        else:
-                            if user_info:
-                                st.header(f"👤 User {user_id} Profile")
-                                
-                                col1, col2, col3, col4 = st.columns(4)
-                                with col1:
-                                    st.metric("Total Ratings", user_info['stats']['total_ratings'])
-                                with col2:
-                                    st.metric("Average Rating", f"{user_info['stats']['avg_rating']}/5.0")
-                                with col3:
-                                    quality = user_info['preference_quality']
-                                    quality_emoji = "🔥" if quality == 'high' else "👍" if quality == 'moderate' else "📈"
-                                    st.metric("Preference Quality", f"{quality_emoji} {quality.title()}")
-                                with col4:
-                                    st.metric("Categories Explored", len(user_info['category_preferences']))
-                                
-                                if user_info['top_items']:
-                                    st.subheader("⭐ Your Highly Rated Items")
-                                    for item in user_info['top_items'][:5]:
-                                        st.markdown(f"- **{item['item_code']}** ({item['category']}): {item['rating']}/5.0")
-                                
-                                if user_info['category_preferences']:
-                                    st.subheader("📊 Your Category Preferences")
-                                    for category, data in list(user_info['category_preferences'].items())[:10]:
-                                        st.markdown(f"- **{category}**: {data['average_rating']}/5.0 ({data['items_rated']} items)")
+                        except Exception as e:
+                            st.error(f"Error generating recommendations: {str(e)}")
+            
+            else:
+                with st.form("user_recommendation_form"):
+                    st.subheader("📝 User Information")
                     
-                    except Exception as e:
-                        st.error(f"Error generating recommendations: {str(e)}")
-        
-        else:
-            with st.form("user_recommendation_form"):
-                st.subheader("📝 User Information")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("**Basic Information**")
+                        user_id = st.number_input(
+                            "Assign User ID",
+                            min_value=7000,
+                            max_value=9999,
+                            value=7000
+                        )
+                        
+                        age = st.number_input("Age", min_value=5, max_value=80, value=25)
+                        gender = st.selectbox("Gender", ["M", "F"])
+                    
+                    with col2:
+                        st.markdown("**Learning Background**")
+                        
+                        diagnosis_timing = st.selectbox(
+                            "When did you receive your dyslexia diagnosis?",
+                            ['Elementari', 'Medie', 'Superiori (1° o 2° anno)', 'Superiori (3°, 4° o 5° anno)']
+                        )
+                        
+                        has_other_difficulties = st.selectbox(
+                            "Do you have other learning difficulties?",
+                            ['No, solo dislessia', 'Si']
+                        )
+                        
+                        other_difficulties_details = st.selectbox(
+                            "If yes, which other difficulties?",
+                            ['Altro','Difficoltà nel calcolo - Discalculia','Difficoltà nel calcolo - Discalculia, Altro',"Difficoltà nel calcolo - Discalculia, Difficoltà nell'ortografia - Disortografia","Difficoltà nel calcolo - Discalculia, Difficoltà nell'ortografia - Disortografia, Altro",'Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia','Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia, Altro',"Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia","Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia, Altro","Difficoltà nell'ortografia - Disortografia","Difficoltà nell'ortografia - Disortografia, Altro",'Difficoltà nella scrittura - Disgrafia','Difficoltà nella scrittura - Disgrafia, Altro',"Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia","Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia, Altro",'Nessuno']
+                        ) if has_other_difficulties == "Si" else "Nessuno"
+                        
+                        family_history = st.selectbox(
+                            "Family history of dyslexia?",
+                            ["No", "Si"]
+                        )
+                    
+                    preferences = []
+                    if user_type == "new_user_with_preference":
+                        st.subheader("🎯 Learning Tool Preferences")
+                        st.info("Rate your interest in different tool categories (1-5 scale)")
+                        
+                        unique_categories = sorted(set(CATEGORY_MAPPING.values()))
+                        
+                        pref_cols = st.columns(2)
+                        for i, category in enumerate(unique_categories):
+                            with pref_cols[i % 2]:
+                                rating = st.slider(
+                                    f"{category}",
+                                    min_value=1,
+                                    max_value=5,
+                                    value=3,
+                                    key=f"pref_{category.replace(' ', '_')}"
+                                )
+                                if rating > 3:
+                                    preferences.append(category)
+                    
+                    # Form ends here
+                    submitted = st.form_submit_button("🎯 Get Recommendations", type="primary")
                 
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("**Basic Information**")
-                    user_id = st.number_input(
-                        "Assign User ID",
-                        min_value=7000,
-                        max_value=9999,
-                        value=7000
-                    )
-                    
-                    age = st.number_input("Age", min_value=5, max_value=80, value=25)
-                    gender = st.selectbox("Gender", ["M", "F"])
-                
-                with col2:
-                    st.markdown("**Learning Background**")
-                    
-                    diagnosis_timing = st.selectbox(
-                        "When did you receive your dyslexia diagnosis?",
-                        ['Elementari', 'Medie', 'Superiori (1° o 2° anno)', 'Superiori (3°, 4° o 5° anno)']
-                    )
-                    
-                    has_other_difficulties = st.selectbox(
-                        "Do you have other learning difficulties?",
-                        ['No, solo dislessia', 'Si']
-                    )
-                    
-                    other_difficulties_details = st.selectbox(
-                        "If yes, which other difficulties?",
-                        ['Altro','Difficoltà nel calcolo - Discalculia','Difficoltà nel calcolo - Discalculia, Altro',"Difficoltà nel calcolo - Discalculia, Difficoltà nell'ortografia - Disortografia","Difficoltà nel calcolo - Discalculia, Difficoltà nell'ortografia - Disortografia, Altro",'Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia','Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia, Altro',"Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia","Difficoltà nel calcolo - Discalculia, Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia, Altro","Difficoltà nell'ortografia - Disortografia","Difficoltà nell'ortografia - Disortografia, Altro",'Difficoltà nella scrittura - Disgrafia','Difficoltà nella scrittura - Disgrafia, Altro',"Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia","Difficoltà nella scrittura - Disgrafia, Difficoltà nell'ortografia - Disortografia, Altro",'Nessuno']
-                    ) if has_other_difficulties == "Si" else "Nessuno"
-                    
-                    family_history = st.selectbox(
-                        "Family history of dyslexia?",
-                        ["No", "Si"]
-                    )
-                
-                preferences = []
-                if user_type == "new_user_with_preference":
-                    st.subheader("🎯 Learning Tool Preferences")
-                    st.info("Rate your interest in different tool categories (1-5 scale)")
-                    
-                    unique_categories = sorted(set(CATEGORY_MAPPING.values()))
-                    
-                    pref_cols = st.columns(2)
-                    for i, category in enumerate(unique_categories):
-                        with pref_cols[i % 2]:
-                            rating = st.slider(
-                                f"{category}",
-                                min_value=1,
-                                max_value=5,
-                                value=3,
-                                key=f"pref_{category.replace(' ', '_')}"
-                            )
-                            if rating > 3:
-                                preferences.append(category)
-                
-                submitted = st.form_submit_button("🎯 Get Recommendations", type="primary")
-                
+                # --- THIS BLOCK MUST BE OUTSIDE THE FORM ---
                 if submitted:
                     user_profile = {
                         'id': user_id,
@@ -683,6 +683,7 @@ def main():
                                             st.bar_chart(rating_dist)
                                             st.caption("Rating distribution")
                                     
+                                    # Safe to download now that it is out of the form!
                                     csv = rec_df.to_csv(index=False)
                                     st.download_button(
                                         "📥 Download Recommendations",
@@ -699,66 +700,65 @@ def main():
         
         if not st.session_state.data_loaded:
             st.warning("⚠️ Please load data first to view analytics.")
-            return
-        
-        st.subheader("📈 Dataset Overview")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        try:
-            with col1:
-                st.metric("Total Users", rec_system.data_processor.num_users)
-            with col2:
-                st.metric("Total Items", rec_system.data_processor.num_items)
-            with col3:
-                st.metric("Total Ratings", len(rec_system.data_processor.ratings_data))
-            with col4:
-                avg_rating = rec_system.data_processor.ratings_data['rating'].mean() * 5
-                st.metric("Average Rating", f"{avg_rating:.2f}/5.0")
+        else:
+            st.subheader("📈 Dataset Overview")
             
-            st.subheader("📊 Rating Distribution")
-            ratings_scaled = rec_system.data_processor.ratings_data['rating'] * 5
-            hist_data = np.histogram(ratings_scaled, bins=20)
-            chart_data = pd.DataFrame({
-                'Rating': [f"{hist_data[1][i]:.1f}" for i in range(len(hist_data[0]))],
-                'Count': hist_data[0]
-            })
-            st.bar_chart(chart_data.set_index('Rating'))
+            col1, col2, col3, col4 = st.columns(4)
             
-            st.subheader("👥 User Activity")
-            user_activity = rec_system.data_processor.ratings_data['user_id'].value_counts()
-            st.write(f"Most active user: {user_activity.index[0]} with {user_activity.iloc[0]} ratings")
-            st.write(f"Average ratings per user: {user_activity.mean():.1f}")
-            
-            st.subheader("🏷️ Category Analysis")
-            
-            category_stats = []
-            for item_id, item_code in rec_system.data_processor.item_id_to_code.items():
-                category = CATEGORY_MAPPING.get(item_code, 'Other')
-                item_ratings = rec_system.data_processor.ratings_data[
-                    rec_system.data_processor.ratings_data['item_id'] == item_id
-                ]
-                if len(item_ratings) > 0:
-                    category_stats.append({
-                        'Category': category,
-                        'Item': item_code,
-                        'Avg Rating': item_ratings['rating'].mean() * 5,
-                        'Rating Count': len(item_ratings)
-                    })
-            
-            if category_stats:
-                category_df = pd.DataFrame(category_stats)
+            try:
+                with col1:
+                    st.metric("Total Users", rec_system.data_processor.num_users)
+                with col2:
+                    st.metric("Total Items", rec_system.data_processor.num_items)
+                with col3:
+                    st.metric("Total Ratings", len(rec_system.data_processor.ratings_data))
+                with col4:
+                    avg_rating = rec_system.data_processor.ratings_data['rating'].mean() * 5
+                    st.metric("Average Rating", f"{avg_rating:.2f}/5.0")
                 
-                category_avg = category_df.groupby('Category')['Avg Rating'].mean().sort_values(ascending=False)
-                st.bar_chart(category_avg)
-                st.caption("Average ratings by category")
+                st.subheader("📊 Rating Distribution")
+                ratings_scaled = rec_system.data_processor.ratings_data['rating'] * 5
+                hist_data = np.histogram(ratings_scaled, bins=20)
+                chart_data = pd.DataFrame({
+                    'Rating': [f"{hist_data[1][i]:.1f}" for i in range(len(hist_data[0]))],
+                    'Count': hist_data[0]
+                })
+                st.bar_chart(chart_data.set_index('Rating'))
                 
-                st.subheader("⭐ Top Rated Items")
-                top_items = category_df.nlargest(10, 'Avg Rating')
-                st.dataframe(top_items, use_container_width=True)
-        
-        except Exception as e:
-            st.error(f"Error displaying analytics: {str(e)}")
+                st.subheader("👥 User Activity")
+                user_activity = rec_system.data_processor.ratings_data['user_id'].value_counts()
+                st.write(f"Most active user: {user_activity.index[0]} with {user_activity.iloc[0]} ratings")
+                st.write(f"Average ratings per user: {user_activity.mean():.1f}")
+                
+                st.subheader("🏷️ Category Analysis")
+                
+                category_stats = []
+                for item_id, item_code in rec_system.data_processor.item_id_to_code.items():
+                    category = CATEGORY_MAPPING.get(item_code, 'Other')
+                    item_ratings = rec_system.data_processor.ratings_data[
+                        rec_system.data_processor.ratings_data['item_id'] == item_id
+                    ]
+                    if len(item_ratings) > 0:
+                        category_stats.append({
+                            'Category': category,
+                            'Item': item_code,
+                            'Avg Rating': item_ratings['rating'].mean() * 5,
+                            'Rating Count': len(item_ratings)
+                        })
+                
+                if category_stats:
+                    category_df = pd.DataFrame(category_stats)
+                    
+                    category_avg = category_df.groupby('Category')['Avg Rating'].mean().sort_values(ascending=False)
+                    st.bar_chart(category_avg)
+                    st.caption("Average ratings by category")
+                    
+                    st.subheader("⭐ Top Rated Items")
+                    top_items = category_df.nlargest(10, 'Avg Rating')
+                    st.dataframe(top_items, use_container_width=True)
+            
+            except Exception as e:
+                st.error(f"Error displaying analytics: {str(e)}")
     
     st.markdown("---")
     st.markdown("""

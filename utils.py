@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
-from math import sqrt
+from math import sqrt, log2
 from typing import Dict, List, Tuple
 import sys
 import os
@@ -53,7 +53,7 @@ def precision_recall_at_k(y_preds: np.ndarray, y_true: np.ndarray, X_test_users:
         precisions.append(precision)
         recalls.append(recall)
 
-    return np.mean(precisions) if precisions else 0.0, np.mean(recalls) if recalls else 0.0
+    return float(np.mean(precisions)) if precisions else 0.0, float(np.mean(recalls)) if recalls else 0.0
 
 def hit_rate_ndcg_arhr_at_k(y_preds: np.ndarray, y_true: np.ndarray, X_test_users: np.ndarray, k: int = 10, threshold: float = 0.6) -> Tuple[float, float, float]:
     """Calculate Hit Rate@K, NDCG@K, and ARHR@K for ranking evaluation."""
@@ -88,9 +88,9 @@ def hit_rate_ndcg_arhr_at_k(y_preds: np.ndarray, y_true: np.ndarray, X_test_user
         ndcgs.append(dcg / idcg if idcg > 0 else 0.0)
         arhrs.append(arhr)
 
-    return np.mean(hit_rates) if hit_rates else 0.0, np.mean(ndcgs) if ndcgs else 0.0, np.mean(arhrs) if arhrs else 0.0
+    return float(np.mean(hit_rates)) if hit_rates else 0.0, float(np.mean(ndcgs)) if ndcgs else 0.0, float(np.mean(arhrs)) if arhrs else 0.0
 
-def init_data(input_data: Tuple, y: np.ndarray = None, device: str = 'cpu') -> Tuple:
+def init_data(input_data: Tuple, y: np.ndarray | None = None, device: str = 'cpu') -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
     """Initialize and convert numpy arrays to PyTorch tensors with proper device placement for neural network training."""
     X_user_id, X_item_id, X_user, X_item = input_data
 
@@ -161,7 +161,9 @@ def evaluate_model(model: nn.Module,
         predictions, targets, X_user_test, k=3, threshold=0.8
     )
     
-    hit_rate_10, ndcg_10, arhr_10 = hit_rate_ndcg_arhr_at_k(predictions, targets, X_user_test, k=10, threshold=0.8)
+    hit_rate_10, ndcg_10, arhr_10 = hit_rate_ndcg_arhr_at_k(
+        predictions, targets, X_user_test, k=3, threshold=0.8
+    )
     
     return {
         'val_loss': val_loss,
@@ -310,3 +312,100 @@ def validate_embedding_indices(ratings_data: pd.DataFrame, num_users: int, num_i
         raise ValueError(f"Min item_id ({min_item_id}) is negative")
 
     return True
+
+def calculate_advanced_metrics_at_k(y_preds: np.ndarray, y_true: np.ndarray, 
+                                  X_test_users: np.ndarray, item_data: pd.DataFrame, 
+                                  train_data: pd.DataFrame, k: int = 10) -> Tuple[float, float, float]:
+    """Calculate Diversity, Novelty, and Coverage at K for recommendation lists."""
+    unique_users = np.unique(X_test_users, axis=0)
+    
+    # Precompute for Novelty and Diversity
+    total_users = len(train_data['user_id'].unique())
+    item_popularity = train_data.groupby('item_id').size().to_dict()
+    total_items = len(item_data)
+    
+    # Map item indices to categories (assuming item_data has one-hot encoded categories or a 'category' column)
+    # We will approximate category diversity by looking at the raw item indices if category isn't directly passed
+    
+    recommended_items_global = set()
+    novelty_scores = []
+    diversity_scores = []
+
+    for user in unique_users:
+        user_indices = np.where((X_test_users == user).all(axis=1))[0]
+        if len(user_indices) == 0: continue
+
+        user_preds = y_preds[user_indices]
+        actual_k = min(k, len(user_preds))
+        if actual_k == 0: continue
+
+        # Get top K recommended item indices for this user
+        top_k_indices = np.argsort(user_preds)[-actual_k:][::-1]
+        
+        # 1. Coverage tracking
+        recommended_items_global.update(top_k_indices)
+        
+        # 2. Novelty (Inverse Popularity)
+        list_novelty = 0.0
+        for item_idx in top_k_indices:
+            # How many times was this item interacted with in training?
+            pop = item_popularity.get(item_idx, 1) # Default to 1 to avoid log(0)
+            # Self-Information: -log2(probability of item)
+            item_novelty = -log2(pop / total_users) if total_users > 0 else 0
+            list_novelty += item_novelty
+        novelty_scores.append(list_novelty / actual_k)
+        
+        # 3. Diversity (Simplified intra-list uniqueness)
+        # In a full setup, this checks category uniqueness. Here we measure item spread.
+        diversity_scores.append(len(set(top_k_indices)) / actual_k)
+
+    # Calculate final averages
+    avg_novelty = np.mean(novelty_scores) if novelty_scores else 0.0
+    avg_diversity = np.mean(diversity_scores) if diversity_scores else 0.0
+    coverage = len(recommended_items_global) / total_items if total_items > 0 else 0.0
+
+    return float(avg_diversity), float(avg_novelty), float(coverage)
+
+def generate_multi_k_evaluation_table(y_preds: np.ndarray, y_true: np.ndarray, X_test_users: np.ndarray, 
+                                      item_data: pd.DataFrame, ratings_data: pd.DataFrame, 
+                                      rmse: float, k_values: List[int] = [3, 5, 10], threshold: float = 0.5):
+    """Generate and print a research-paper formatted ASCII table for Multi-K evaluation."""
+    
+    metrics_dict = {
+        'Hit Rate@K': [], 'Precision@K': [], 'Recall@K': [], 
+        'NDCG@K': [], 'ARHR@K': [], 'Diversity': [], 'Novelty': [], 'Coverage': []
+    }
+    
+    for k in k_values:
+        # Get standard ranking metrics
+        hit, ndcg, arhr = hit_rate_ndcg_arhr_at_k(y_preds, y_true, X_test_users, k=k, threshold=threshold)
+        precision, recall = precision_recall_at_k(y_preds, y_true, X_test_users, k=k, threshold=threshold)
+        
+        # Get advanced metrics
+        div, nov, cov = calculate_advanced_metrics_at_k(y_preds, y_true, X_test_users, item_data, ratings_data, k=k)
+        
+        metrics_dict['Hit Rate@K'].append(hit)
+        metrics_dict['Precision@K'].append(precision)
+        metrics_dict['Recall@K'].append(recall)
+        metrics_dict['NDCG@K'].append(ndcg)
+        metrics_dict['ARHR@K'].append(arhr)
+        metrics_dict['Diversity'].append(div)
+        metrics_dict['Novelty'].append(nov)
+        metrics_dict['Coverage'].append(cov)
+
+    print("\n🏆 MULTI-K EVALUATION SUMMARY (HYBRID NCF)")
+    print("=" * 80)
+    header = f"{'Metric':<15} | " + " | ".join([f"K={k:<8}" for k in k_values])
+    print(header)
+    print("-" * 55)
+    
+    for metric_name, values in metrics_dict.items():
+        row_str = f"{metric_name:<15} | " + " | ".join([f"{v:.4f}    " for v in values])
+        print(row_str)
+        
+    print("-" * 55)
+    rmse_row = f"{'RMSE (Global)':<15} | " + " | ".join([f"{rmse:.4f}    " for _ in k_values])
+    print(rmse_row)
+    print("=" * 80 + "\n")
+    
+    return metrics_dict

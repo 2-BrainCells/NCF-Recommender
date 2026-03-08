@@ -8,9 +8,9 @@ import torch.optim as optim
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-from config import DEFAULT_CONFIG, LOGGING_CONFIG, DEVICE, CATEGORY_MAPPING
+from config import SYSTEM_CONFIG, LOGGING_CONFIG, DEVICE, CATEGORY_MAPPING
 from data_processor import DataProcessor
-from model import NeuralCollaborativeFiltering, TrainingEarlyStopping
+from model import NeuralCollaborativeFiltering, TrainingEarlyStopping as EarlyStopping
 from hpo import HyperparameterOptimizer
 from utils import train_model_epoch, evaluate_model, get_popular_items, validate_embedding_indices
 
@@ -18,15 +18,15 @@ class DyslexiaRecommendationSystem:
     """Comprehensive recommendation system for dyslexic learners providing personalized learning tool suggestions based on user profiles and collaborative filtering."""
 
     def __init__(self,
-                 embedding_dims: int = None,
-                 hidden_dims: List[int] = None,
-                 dropout: float = None,
-                 learning_rate: float = None,
-                 weight_decay: float = None,
-                 batch_size: int = None,
-                 device: str = None):
+                 embedding_dims: int | None = None,
+                 hidden_dims: List[int] | None = None,
+                 dropout: float | None = None,
+                 learning_rate: float | None = None,
+                 weight_decay: float | None = None,
+                 batch_size: int | None = None,
+                 device: str | None = None):
         """Initialize recommendation system with configurable hyperparameters and component initialization."""
-        config = DEFAULT_CONFIG.copy()
+        config = SYSTEM_CONFIG.copy()
         self.embedding_dims = embedding_dims or config['embedding_dims']
         self.hidden_dims = hidden_dims or config['hidden_dims']
         self.dropout = dropout or config['dropout']
@@ -96,89 +96,121 @@ class DyslexiaRecommendationSystem:
             'n_trials': len(study.trials)
         }
 
-    def train_model(self,
-                   epochs: int = None,
-                   validation_split: float = None,
-                   early_stopping_patience: int = None,
-                   use_best_params: bool = True) -> Dict:
-        """Train neural collaborative filtering model with optional hyperparameter optimization results and comprehensive evaluation."""
-        if self.data_processor.user_data is None:
-            raise ValueError("Data must be loaded before training")
-
-        epochs = epochs or DEFAULT_CONFIG['epochs']
-        validation_split = validation_split or DEFAULT_CONFIG['validation_split']
-        early_stopping_patience = early_stopping_patience or DEFAULT_CONFIG['early_stopping_patience']
-
+    def train_model(self, epochs: int | None = None, batch_size: int | None = None, 
+                    lr: float | None = None, config: dict = SYSTEM_CONFIG,
+                    use_best_params: bool = False, hpo_results: dict | None = None, **kwargs):
+        """Train the neural collaborative filtering model with validation and Early Stopping."""
         self.logger.info("Starting model training...")
         
-        validate_embedding_indices(
-            self.data_processor.ratings_data,
-            self.data_processor.num_users,
-            self.data_processor.num_items
-        )
-
-        if use_best_params and self.best_params is not None:
-            self.logger.info("Using optimized hyperparameters from HPO")
-            self.embedding_dims = self.best_params['embedding_dims']
-            self.hidden_dims = self.best_params['hidden_dims']
-            self.dropout = self.best_params['dropout']
-            self.learning_rate = self.best_params['learning_rate']
-            self.weight_decay = self.best_params['weight_decay']
-            self.batch_size = self.best_params['batch_size']
-
+        if use_best_params and hpo_results and 'best_params' in hpo_results:
+            self.logger.info("Applying best hyperparameters from Optuna...")
+            best = hpo_results['best_params']
+            lr = best.get('learning_rate', best.get('lr', lr))
+            batch_size = best.get('batch_size', batch_size)
+            epochs = best.get('epochs', epochs)
+            
+        # 1. Use provided args, or fallback to central config
+        epochs = epochs or config.get('epochs', 100)
+        batch_size = batch_size or config.get('batch_size', 64)
+        lr = lr or config.get('learning_rate', 0.001)
+        weight_decay = config.get('weight_decay', 1e-4)
+        patience = config.get('early_stopping_patience', 10)
+        
+        # 2. Split data using the new LOO & Negative Sampling method
         train_data, val_data, test_data = self.data_processor.split_data(
             self.data_processor.user_data,
             self.data_processor.item_data,
             self.data_processor.ratings_data,
-            validation_split
+            validation_split=config.get('validation_split', 0.2)
         )
-
-        num_users = self.data_processor.num_users
-        num_items = self.data_processor.num_items
-        user_feature_dim = self.data_processor.user_data.shape[1]
-        item_feature_dim = self.data_processor.item_data.shape[1]
-
-        self.logger.info(f"Model dimensions - Users: {num_users}, Items: {num_items}, "
-                        f"User features: {user_feature_dim}, Item features: {item_feature_dim}")
-
-        self.model = NeuralCollaborativeFiltering(
-            num_users=num_users,
-            num_items=num_items,
-            user_feature_dim=user_feature_dim,
-            item_feature_dim=item_feature_dim,
-            embedding_dims=self.embedding_dims, # 256
-            hidden_dims=self.hidden_dims, # [512, 1024] from hpo
-            dropout=self.dropout, # dropout 0.14
+        
+        # Initialize model if not already created
+        if self.model is None:
+            self.model = NeuralCollaborativeFiltering(
+                num_users=self.data_processor.num_users + 1,
+                num_items=self.data_processor.num_items,
+                user_feature_dim=self.data_processor.user_data.shape[1] if self.data_processor.user_data is not None else 10,
+                item_feature_dim=len(self.data_processor.category_names) if hasattr(self.data_processor, 'category_names') else 10,
+                embedding_dims=self.embedding_dims,
+                hidden_dims=self.hidden_dims,
+                dropout=self.dropout,
+                device=self.device
+            )
+            self.model.to(self.device)
+        
+        # 3. Setup optimizer, loss function, and early stopping
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
+        
+        # Switch to BCELoss for Ranking (Binary targets 0.0 and 1.0)
+        criterion = torch.nn.BCELoss()
+        early_stopping = EarlyStopping(patience=patience, delta=0.001)
+        
+        # 4. Execute the training loop
+        training_history = train_model_epoch(
+            model=self.model,
+            train_data=train_data,
+            val_data=val_data,
+            epochs=epochs,
+            batch_size=batch_size,
+            optimizer=optimizer,
+            criterion=criterion,
+            early_stopping=early_stopping,
             device=self.device
         )
+        
+        # 5. Generate the Multi-K Evaluation Table for Research
+        if test_data is not None:
+            self.logger.info("Generating Multi-K Evaluation Table...")
+            self.model.eval()
+            
+            # Extract test sets
+            X_user_test, X_item_test, y_test = test_data
+            X_user_tensor = torch.FloatTensor(X_user_test).to(self.device)
+            X_item_tensor = torch.FloatTensor(X_item_test).to(self.device)
+            user_ids_tensor = torch.IntTensor(y_test[:, 0]).to(self.device)
+            item_ids_tensor = torch.IntTensor(y_test[:, 1]).to(self.device)
+            targets = y_test[:, 2]
 
-        self.model.to(self.device)
+            with torch.no_grad():
+                # Get raw model predictions
+                predictions = self.model(user_ids_tensor, item_ids_tensor, X_user_tensor, X_item_tensor).cpu().numpy()
+            
+            # Get final RMSE from history (or default to 0.0 if not found)
+            final_rmse = training_history['rmse'][-1] if 'rmse' in training_history and training_history['rmse'] else 0.0
 
-        criterion = torch.nn.MSELoss()
-        optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=self.learning_rate,
-            weight_decay=self.weight_decay
-        )
+            # Import the new function dynamically to avoid circular imports
+            from utils import generate_multi_k_evaluation_table
+            
+            # Safely grab dataframes and threshold
+            item_df = getattr(self.data_processor, 'item_data', pd.DataFrame({'item_id': range(39)}))
+            ratings_df = getattr(self.data_processor, 'ratings_data', pd.DataFrame())
+            threshold = config.get('hit_threshold', 0.5)
 
-        early_stopping = TrainingEarlyStopping(
-            patience=early_stopping_patience,
-            delta=0.0002
-        )
+            # Generate the table and save metrics
+            table_metrics = generate_multi_k_evaluation_table(
+                y_preds=predictions, 
+                y_true=targets, 
+                X_test_users=X_user_test, 
+                item_data=item_df,
+                ratings_data=ratings_df,
+                rmse=final_rmse,
+                k_values=[3, 5, 10],
+                threshold=threshold
+            )
+            
+            training_history['multi_k_metrics'] = table_metrics
+            
+            # Package the K=10 metrics (the last item in our Multi-K lists) 
+            # into the 'test_metrics' dictionary that main.py expects to print.
+            training_history['test_metrics'] = {
+                'rmse': final_rmse,
+                'hit_rate_10': table_metrics['Hit Rate@K'][-1],
+                'ndcg_10': table_metrics['NDCG@K'][-1],
+                'precision_10': table_metrics['Precision@K'][-1],
+                'recall_10': table_metrics['Recall@K'][-1]
+            }
 
-        training_history = train_model_epoch(
-            self.model, train_data, val_data, epochs, self.batch_size,
-            optimizer, criterion, early_stopping, self.device
-        )
-
-        test_metrics = evaluate_model(self.model, test_data, self.batch_size, criterion, self.device)
-
-        self.logger.info(f"Training completed. Test RMSE: {test_metrics['rmse']:.4f}")
-
-        return {
-            'training_history': training_history,
-            'test_metrics': test_metrics
-        }
+        return training_history
 
     def get_recommendations(self, user_profile: Dict, top_k: int = 10) -> str:
         """Generate personalized recommendations for users based on profile analysis and return structured JSON response."""

@@ -1,0 +1,402 @@
+Here is the detailed overview of the DataProcessor class and its functions:
+
+1. data_processor.py (The Data Engine)
+__init__(self)
+
+What it does: Initializes the class by setting up empty dictionaries and lists that will later hold category mappings, diagnosis lists, and track the total number of users and items.
+
+Input: None.
+
+Output: An initialized DataProcessor object.
+
+create_item_data(self, ratings_df)
+
+What it does: Extracts the catalog of learning tools. It looks at the raw ratings dataframe, identifies the columns representing tools, and maps them to their broader category (like "Audio Book Tools") using your CATEGORY_MAPPING.
+
+Input: ratings_df (Pandas DataFrame) - The raw ratings data.
+
+Output: A DataFrame containing item_id (numeric index), item_code (e.g., 'T1'), and category.
+
+create_ratings_data(self, ratings_df)
+
+What it does: Cleans the raw ratings matrix into a true "sparse" format, isolating explicit feedback. It removes non-numeric or missing entries ('NC', 'NSU', blanks, zeros) to avoid penalizing items the user simply hasn't seen. It then reshapes the data from a wide matrix into a long list and scales the ratings down (e.g., dividing by 5.0).
+
+Input: ratings_df (Pandas DataFrame).
+
+Output: A DataFrame with three columns: user_id, item_id, and rating.
+
+create_user_data(self, demographic_df, ratings_df)
+
+What it does: Builds the demographic profiles. It calculates the user's age from their birth year, standardizes text responses (like gender and diagnosis timing), and uniquely scrapes the "P1-P12" learning difficulty metrics from the ratings dataframe, attaching them to the user profile.
+
+Input: demographic_df and ratings_df (Pandas DataFrames).
+
+Output: A structured DataFrame representing user demographics and specific learning difficulty flags.
+
+encode_user_features(self, user_data) / encode_item_features(self, item_data)
+
+What it does: Machine learning models can't read text like "Male" or "Audio Book Tools". These functions perform "one-hot encoding," converting categorical text columns into binary (1s and 0s) feature vectors.
+
+Input: Cleaned user_data or item_data DataFrames.
+
+Output: DataFrames containing only numerical/float data ready for PyTorch.
+
+extract_user_category_preferences(self, user_data, item_data, ratings_data)
+
+What it does: Calculates a user's historical affinity for specific tool categories based on what they've highly rated in the past. To prevent skewed data (e.g., a user rating exactly one audio tool a 5/5), it applies a mathematical exponential decay penalty.
+
+Input: The three main DataFrames (user_data, item_data, ratings_data).
+
+Output: The user feature DataFrame appended with calculated preference scores for each category.
+
+extend_user_item_data(self, user_data, item_data, ratings_data)
+
+What it does: Aligns the user and item feature matrices so their structures exactly match the ordering of the ratings_data. It fills any missing gaps with 0 to prevent poisoning the neural network with NaNs.
+
+Input: The three processed DataFrames.
+
+Output: A tuple containing the extended, aligned user_data and item_data DataFrames.
+
+split_data(self, user_data, item_data, ratings_data, validation_split)
+
+What it does: This is a critical function for ranking. It uses a "Leave-One-Out" (LOO) strategy. For every user, it hides one item they liked to use as the test set. It then uses "Negative Sampling," picking items the user has never seen to act as negative examples, forcing the model to learn the difference between what a user likes and what they ignore.
+
+Input: The final DataFrames and a float for the validation split.
+
+Output: Three tuples representing the Training, Validation, and Testing sets (each containing User inputs, Item inputs, and target Labels).
+
+preprocess_data(self, demographic_df, ratings_df)
+
+What it does: The master orchestrator. It calls all the functions above in the correct sequence to take raw CSVs all the way to ML-ready datasets.
+
+Input: Raw demographic_df and ratings_df.
+
+Output: The fully processed user_data, item_data, and ratings_data.
+
+
+model.py (The Neural Architecture)
+Class: NeuralCollaborativeFiltering
+This is the main neural network class, inheriting from PyTorch's nn.Module.
+
+__init__(self, num_users, num_items, user_feature_dim, item_feature_dim, embedding_dims, hidden_dims, dropout, device, trial)
+
+What it does: Constructs the architecture of the neural network.
+
+It creates four separate "Embedding Tables" (lookup tables that learn latent factors): two for users (one for the MLP path, one for the MF path) and two for items.
+
+It sets up linear transformation layers to compress the explicit demographic and category features.
+
+It dynamically builds the hidden layers of the MLP. If an Optuna trial is passed, it lets the optimizer choose the number of layers and their sizes; otherwise, it uses the hardcoded hidden_dims list.
+
+Finally, it defines the ultimate prediction layer using a Sigmoid activation function to output a value between 0 and 1.
+
+Input: Architecture dimensions (number of users/items, feature sizes), hyperparameters (embedding size, hidden layer sizes, dropout rate), compute device (CPU/GPU), and an optional Optuna trial object for hyperparameter tuning.
+
+Output: An initialized PyTorch neural network module ready to be trained.
+
+_initialize_weights(self)
+
+What it does: An internal helper function that sets the initial mathematical weights of the network before training begins. Proper initialization prevents the "vanishing gradient" problem and helps the model learn much faster. It uses Normal distribution for embeddings, Kaiming Uniform for the ReLU-activated MLP layers, and Xavier Uniform for the final Sigmoid layer.
+
+Input: None (it operates on the class's own initialized layers).
+
+Output: None (modifies the network weights in-place).
+
+forward(self, user_ids, item_ids, user_features, item_features, user_embeddings)
+
+What it does: This defines the "forward pass"—exactly how data flows through the network to make a prediction.
+
+It maps the user and item IDs to their respective learned embeddings.
+
+It passes the explicit demographic/item features through their transformation layers.
+
+MLP Path: It concatenates the user embeddings, item embeddings, and transformed features together, then passes this massive vector through the hidden MLP layers to learn complex, non-linear interactions.
+
+MF Path: It multiplies the user MF embedding and item MF embedding together (dot product) to capture direct, linear interactions.
+
+It concatenates the output of both the MLP and MF paths and passes them through the final prediction layer to spit out a score.
+
+Input: PyTorch Tensors containing batches of user_ids, item_ids, user_features, and item_features. (Also accepts optional pre-computed user_embeddings).
+
+Output: A 1D PyTorch Tensor of predicted interaction scores (probabilities squashed between 0.0 and 1.0).
+
+Class: TrainingEarlyStopping
+A utility class used during the training loop to prevent the model from memorizing the training data (overfitting).
+
+__init__(self, patience, delta, verbose)
+
+What it does: Sets up the early stopping tracker. patience defines how many epochs (training rounds) the system will wait for the model to improve before pulling the plug. delta is the minimum change required to be considered an "improvement."
+
+Input: patience (integer), delta (float), and verbose (boolean for printing logs).
+
+Output: An initialized early stopping monitor.
+
+__call__(self, val_loss, model)
+
+What it does: After every training epoch, this function is called to check the current validation loss against the best recorded validation loss. If the model hasn't improved by at least the delta amount for patience consecutive epochs, it flips a switch (self.early_stop = True) to halt the training process early, saving time and compute resources.
+
+Input: The current epoch's val_loss (float) and the PyTorch model.
+
+Output: None (it updates internal tracking variables and the early_stop boolean flag).
+
+
+Here is the detailed breakdown of hpo.py. This file handles Hyperparameter Optimization (HPO). Instead of manually guessing the best learning rate, dropout, or layer sizes, this module uses the Optuna framework to systematically search for the mathematically optimal configuration for your NCF model.
+
+3. hpo.py (The Hyperparameter Optimizer)
+Class: EarlyStoppingCallback
+This is a custom utility class designed specifically for the Optuna study. While model.py has early stopping for a single training run, this class stops the entire optimization search if it stops finding better configurations.
+
+__init__(self, patience, min_delta)
+
+What it does: Initializes the early stopping monitor for the Optuna study. It tracks how many consecutive trials have passed without improving the overall best score by at least min_delta.
+
+Input: patience (integer, e.g., 5 trials) and min_delta (float, e.g., 0.001).
+
+Output: An initialized callback object.
+
+__call__(self, study, trial)
+
+What it does: After every single Optuna trial completes, this function checks the study's best recorded value. If the model hasn't found a noticeably better hyperparameter combination after patience number of trials, it executes study.stop() to gracefully abort the search, saving potentially hours of wasted compute time.
+
+Input: The current Optuna study and trial objects.
+
+Output: None (controls the execution state of the Optuna study).
+
+Class: HyperparameterOptimizer
+This is the main engine that orchestrates the search for the perfect model architecture.
+
+__init__(self, data_processor, device)
+
+What it does: Sets up the optimizer by attaching the fully prepared data pipeline (data_processor) and identifying whether to use the CPU or GPU (device).
+
+Input: A populated DataProcessor instance and a device string ('cuda' or 'cpu').
+
+Output: An initialized HyperparameterOptimizer object.
+
+objective_function(self, trial)
+
+What it does: This is the core function Optuna tries to minimize.
+
+It uses the trial object to suggest random (but mathematically guided) values for batch size, embedding dimensions, dropout rate, learning rate, and weight decay.
+
+It instantiates a fresh NeuralCollaborativeFiltering model using these suggested parameters.
+
+It trains this temporary model using your data splits. (It wraps the training loop in a HiddenPrints context manager so your console doesn't get flooded with text during the hundreds of trials).
+
+It returns the final average validation loss. Optuna uses this score to learn which parameter combinations work best.
+
+Input: An Optuna trial object.
+
+Output: A float representing the validation loss for that specific parameter combination.
+
+run_optimization(self, n_trials, timeout, save_study, study_name)
+
+What it does: Kicks off the entire optimization process. It creates an Optuna "study" aimed at minimizing the objective function. It applies a MedianPruner (to quickly kill individual trials that start off performing terribly) and attaches the EarlyStoppingCallback. Once finished, it optionally saves the entire study to a .pkl file so you don't lose the results.
+
+Input: The maximum number of trials to run (n_trials), a maximum time limit in seconds (timeout), a boolean to save the study (save_study), and a filename (study_name).
+
+Output: The completed Optuna Study object containing the history of all trials and the absolute best parameters found.
+
+get_best_config(self)
+
+What it does: Parses the raw results from Optuna and formats them into a clean dictionary that your main system can easily read. Because the number of hidden layers is dynamically generated during the search (e.g., hidden_dim_layer_0, hidden_dim_layer_1), this function specifically hunts down those layer keys, sorts them in the correct order, and bundles them into a single hidden_dims list.
+
+Input: None (it reads from its own internal self.best_params).
+
+Output: A clean Python dictionary containing the optimized embedding_dims, hidden_dims, dropout, learning_rate, weight_decay, and batch_size.
+
+
+recommendation_system.py (The Core Engine)
+Class: DyslexiaRecommendationSystem
+This class encapsulates the entire lifecycle of the recommendation system, from data loading to model training, inference, and saving/loading states.
+
+__init__(self, ...)
+
+What it does: Initializes the system with default hyperparameters (from config.py) or custom ones if provided. It creates an instance of the DataProcessor and sets up placeholders for the model and HPO optimizer. It also initializes the logging system.
+
+Input: Optional overrides for embedding dimensions, hidden layers, dropout, learning rate, weight decay, batch size, and compute device.
+
+Output: A ready-to-use recommendation system instance.
+
+load_data(self, demographic_file, ratings_file)
+
+What it does: The entry point for data. It verifies the CSV files exist and passes them to the DataProcessor.preprocess_data() method to build the ML-ready tensors.
+
+Input: File paths (strings) for the demographics and ratings CSVs.
+
+Output: None (populates the internal DataProcessor state).
+
+run_hyperparameter_optimization(self, n_trials, timeout, save_study, study_name)
+
+What it does: Wraps the HyperparameterOptimizer class. It executes the Optuna search and saves the absolute best hyperparameter dictionary to self.best_params so the training loop can use them later.
+
+Input: HPO configuration constraints (trials, timeout, save flags).
+
+Output: A dictionary summarizing the optimization results (best value, best params, total trials).
+
+train_model(self, epochs, validation_split, early_stopping_patience, use_best_params)
+
+What it does: The main training executor.
+
+Checks if HPO params should be used and updates the model config.
+
+Asks the DataProcessor to split the data (train/val/test).
+
+Instantiates the NeuralCollaborativeFiltering model and moves it to the CPU/GPU.
+
+Sets up the loss function (BCELoss for binary implicit/explicit signals) and the Adam optimizer.
+
+Calls the external train_model_epoch utility to execute the PyTorch training loop.
+
+Evaluates the final model against the hold-out test set.
+
+Input: Training loop configurations.
+
+Output: A comprehensive dictionary containing the epoch-by-epoch training_history and the final test_metrics (Hit Rate, NDCG, RMSE, etc.).
+
+get_recommendations(self, user_profile, top_k)
+
+What it does: The main public API for inference. It acts as a router: it checks if the user_id exists in the historical ratings matrix. If yes, it routes to the existing user logic. If no (or if it's a brand new ID), it routes to the cold-start new user logic. It wraps the final output in a clean JSON format.
+
+Input: user_profile (a Dictionary containing ID, demographics, and optional preferences) and top_k (integer, number of items to recommend).
+
+Output: A JSON-formatted string containing the user type, model info, and the top recommended items with predicted scores.
+
+_get_existing_user_recommendations(self, user_id, top_k)
+
+What it does: Generates recommendations for users with a rating history using a hybrid approach.
+
+Identifies the user's highly-rated items (above a dynamic threshold).
+
+Calls _get_category_based_recommendations to find items in similar categories.
+
+Calls _get_collaborative_recommendations_from_high_rated to find what similar users liked.
+
+Calls _combine_personalized_recommendations to merge the two lists (weighted 60% category, 40% collaborative).
+
+Falls back to purely popular items if the personalized list isn't long enough.
+
+Input: user_id (integer) and top_k (integer).
+
+Output: A list of dictionaries representing the recommended items.
+
+_get_new_user_recommendations(self, user_profile, top_k)
+
+What it does: The "Cold Start" engine.
+
+It creates a mock DataFrame row using the new user's demographic inputs (Age, Gender, Diagnosis Timing, etc.).
+
+It one-hot encodes this mock row to exactly match the dimensional shape of the training data.
+
+It creates PyTorch tensors pairing this one new user profile against all 39 possible items in the catalog.
+
+It passes these tensors through the trained NCF model to get mathematically predicted affinity scores for every item based solely on demographic similarity to historical users.
+
+It applies a +0.5 rating boost to items that match the user's explicitly stated categorical preferences (if any).
+
+Input: user_profile (dictionary) and top_k (integer).
+
+Output: A sorted list of the top recommended items based on demographic inference.
+
+get_user_information(self, user_id)
+
+What it does: An analytics function. It scans the historical data for a specific user and calculates their total ratings, average rating, top 10 highest-rated items, and their top preferred categories. Used heavily by the Streamlit UI dashboard.
+
+Input: user_id (integer).
+
+Output: A dictionary of user statistics and preference insights.
+
+save_model(self, filepath) / load_model(self, filepath)
+
+What it does: State management. save_model packages the trained PyTorch weights (state_dict), the model configuration, the internal mappings (like item_id_to_code), and the preprocessed DataFrames into a single .pth file. load_model does the reverse, allowing you to instantly boot up the application for inference without needing to re-parse CSVs or re-train the neural network.
+
+Input: filepath (string ending in .pth).
+
+Output: None (writes to disk or restores system state in memory).
+
+
+utils.py (Evaluation & Utilities)
+This file contains the helper functions required to train the model, measure its accuracy, and protect it from crashing.
+
+Class: HiddenPrints
+What it does: A context manager that temporarily silences all print() statements. This is highly useful during Hyperparameter Optimization (HPO) so your console isn't flooded with thousands of lines of training logs.
+
+Input / Output: None.
+
+precision_recall_at_k & hit_rate_ndcg_arhr_at_k
+What it does: These are the most critical functions for evaluating a recommendation system. Standard accuracy doesn't work well for recommenders; you need to know if the model puts good items at the top of the list.
+
+Precision/Recall@K: Measures how many of the top-K recommended items were actually relevant to the user.
+
+Hit Rate@K: Returns 1 if at least one relevant item appears in the top K recommendations, otherwise 0.
+
+NDCG@K (Normalized Discounted Cumulative Gain): Rewards the model heavily for putting relevant items in position #1 or #2, and penalizes it if relevant items are pushed down to position #9 or #10.
+
+ARHR@K (Average Reciprocal Hit Rank): Another position-aware metric calculated as 1 divided by the rank position.
+
+Input: Predictions, true targets, the test user array, k (how many items to consider, e.g., Top 3 or Top 10), and a relevance threshold.
+
+Output: The calculated float scores for these metrics.
+
+evaluate_model
+What it does: Runs the testing dataset through the trained model without updating weights (torch.no_grad()). It calculates standard regression metrics (RMSE, MAE, R-Squared) and calls the ranking metric functions mentioned above.
+
+Input: The PyTorch model, test_data, batch_size, loss criterion, and compute device.
+
+Output: A dictionary containing all the calculated test metrics.
+
+train_model_epoch
+What it does: The core PyTorch training loop. It iterates through the DataLoader in batches, passes data through the model, calculates the loss, performs backpropagation (loss.backward()), and updates the network weights (optimizer.step()). It also tracks validation loss and triggers early stopping if needed.
+
+Input: Training data, model, optimizer, epochs, etc.
+
+Output: A history dictionary tracking loss and metrics across all epochs.
+
+get_popular_items
+What it does: The ultimate fallback recommender. If a user has no data, or the model fails, this function recommends items based on a "Popularity Score" (calculated by multiplying an item's average rating by the logarithm of its total review count to balance high ratings with high interaction volume).
+
+Input: Raw ratings_data, top_k, and an ID mapping dictionary.
+
+Output: A list of the most popular item dictionaries.
+
+validate_embedding_indices
+What it does: A safety net. PyTorch embedding tables will instantly crash (IndexError) if you try to look up a User ID or Item ID that is larger than the table size. This function scans the data before training to ensure no IDs exceed the bounds.
+
+6. app.py (The Streamlit Web Interface)
+This file builds the interactive, graphical frontend so non-programmers can use the system.
+
+initialize_system
+What it does: Uses st.session_state to ensure the NCF model stays loaded in memory even when the user clicks buttons or refreshes the web page.
+
+train_model_with_real_progress
+What it does: A specialized version of the training loop built explicitly for Streamlit. Instead of printing to a console, it hooks into st.progress() and st.metric() to render live, updating progress bars, loss counters, and time elapsed directly on the web interface.
+
+get_user_info
+What it does: An analytics wrapper that queries the data processor to pull a specific user's stats (average rating, top categories) and formats them cleanly for the Streamlit dashboard.
+
+main
+What it does: The architectural layout of the web app using Streamlit Tabs:
+
+Tab 1 (System Setup): File uploaders for the demographic and ratings CSVs, plus the button to trigger the live training loop.
+
+Tab 2 (Get Recommendations): A dynamic form. If the user selects "Existing User", it asks for an ID. If they select "New User", it renders dropdowns and sliders for demographics and tool preferences, then calls the recommendation engine and displays the results with bar charts.
+
+Tab 3 (Analytics): Renders dataset-wide insights, rating distributions, and category performance charts.
+
+7. main.py (The Command Line Interface)
+This file acts as the executable entry point if you want to run the system in a terminal instead of a web browser.
+
+load_and_train_system
+What it does: A high-level wrapper that automates the entire pipeline: loading CSVs, optionally triggering Optuna HPO, training the model, printing the final RMSE/NDCG metrics, and saving the .pth weights file.
+
+demo_new_user_with_preferences / demo_new_user_without_preferences / demo_existing_user
+What it does: Hardcoded test scenarios. These functions feed predefined mock data (e.g., a 22-year-old male diagnosed in middle school) directly into the recommendation engine to quickly verify that the logic is functioning properly without needing manual input.
+
+interactive_demo
+What it does: Creates a while True loop that presents a text-based menu in the terminal. It allows the developer to type "1" to test an existing user, or "2" to test a new user, keeping the program alive to run continuous tests.
+
+main
+What it does: The starting block. When you run python main.py, this function asks the user if they want to run Hyperparameter Optimization, executes the training, runs the automated demos, and finally drops the user into the interactive terminal menu.
+
+
+

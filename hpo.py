@@ -100,8 +100,8 @@ class HyperparameterOptimizer:
         return sum(history['val_loss']) / len(history['val_loss'])
 
     def run_optimization(self,
-                        n_trials: int = None,
-                        timeout: int = None,
+                        n_trials: int | None = None,
+                        timeout: int | None = None,
                         save_study: bool = True,
                         study_name: str = 'dyslexia_ncf_optimization') -> optuna.Study:
         """Execute hyperparameter optimization process with configurable trial limits and time constraints."""

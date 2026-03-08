@@ -3,16 +3,21 @@ from typing import List, Dict
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-DEFAULT_CONFIG = {
-    'embedding_dims': 16,            # Reduced from 256
-    'hidden_dims': [64, 32],         # Reduced from [512, 1024]
+SYSTEM_CONFIG = {
+    'embedding_dims': 16,            
+    'hidden_dims': [64, 32],         
     'dropout': 0.2,
-    'learning_rate': 1e-3,           # Adjusted for stable explicit feedback learning
+    'learning_rate': 1e-3,           
     'weight_decay': 1e-5,
-    'batch_size': 64,                # Reduced for sparse data
+    'batch_size': 64,             
     'epochs': 20,
     'validation_split': 0.2,
-    'early_stopping_patience': 3
+    'early_stopping_patience': 3,
+    'top_k_metrics': 5,      # Calculate HitRate/NDCG at this K
+    'hit_threshold': 0.5,     # >0.5 probability is considered a hit (BCE Loss)
+    'recommendation_k': 5,    # How many items to show the user in UI
+    'diversity_cap': 2,       # Max items from the same category allowed
+    'preference_boost': 0.5   # Rating boost applied to explicitly preferred categories
 }
 
 HPO_CONFIG = {

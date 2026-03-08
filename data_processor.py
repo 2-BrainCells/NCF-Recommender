@@ -4,6 +4,7 @@ from datetime import datetime
 from sklearn.model_selection import train_test_split
 from typing import Tuple, Dict
 import logging
+import tqdm
 from config import CATEGORY_MAPPING, DATA_CONFIG
 
 class DataProcessor:
@@ -184,29 +185,76 @@ class DataProcessor:
 
     def split_data(self, user_data: pd.DataFrame, item_data: pd.DataFrame,
                   ratings_data: pd.DataFrame, validation_split: float = 0.2) -> Tuple:
-        """Partition dataset into training, validation, and test sets."""
-        train_ratings, temp_ratings = train_test_split(ratings_data, test_size=0.2, random_state=42)
-        val_ratings, test_ratings = train_test_split(temp_ratings, test_size=0.5, random_state=42)
-
-        train_indices = train_ratings.index
-        val_indices = val_ratings.index
-        test_indices = test_ratings.index
-
-        X_user_train = user_data.iloc[train_indices].values
-        X_user_val = user_data.iloc[val_indices].values
-        X_user_test = user_data.iloc[test_indices].values
-
-        X_item_train = item_data.iloc[train_indices].values
-        X_item_val = item_data.iloc[val_indices].values
-        X_item_test = item_data.iloc[test_indices].values
-
-        y_train = train_ratings.values
-        y_val = val_ratings.values
-        y_test = test_ratings.values
+        """Partition dataset into Leave-One-Out (LOO) setup with explicit Negative Sampling for Research-grade Ranking."""
+        self.logger.info("Generating Leave-One-Out (LOO) splits & Negative Samples...")
+        
+        user_df = user_data.copy()
+        user_df['user_id'] = ratings_data['user_id'].values
+        user_df = user_df.drop_duplicates(subset=['user_id']).set_index('user_id')
+        
+        item_df = item_data.copy()
+        item_df['item_id'] = ratings_data['item_id'].values
+        item_df = item_df.drop_duplicates(subset=['item_id']).set_index('item_id')
+        
+        all_items = set(ratings_data['item_id'].unique())
+        
+        train_pos_users, train_pos_items = [], []
+        train_neg_users, train_neg_items = [], []
+        
+        test_pos_users, test_pos_items = [], []
+        test_neg_users, test_neg_items = [], []
+        
+        for user_id, group in ratings_data.groupby('user_id'):
+            items = group['item_id'].tolist()
+            if len(items) < 2:
+                train_pos_users.extend([user_id] * len(items))
+                train_pos_items.extend(items)
+                continue
+                
+            # LOO: Hold out 1 random interaction for the test set
+            test_pos_item = np.random.choice(items)
+            test_pos_users.append(user_id)
+            test_pos_items.append(test_pos_item)
+            
+            # The rest are train positives
+            train_pos = [i for i in items if i != test_pos_item]
+            train_pos_users.extend([user_id] * len(train_pos))
+            train_pos_items.extend(train_pos)
+            
+            # Generate anti-test set (all unseen items) and train negatives
+            unseen = list(all_items - set(items))
+            
+            if unseen:
+                # Add all unseen to test negatives (The "Haystack")
+                test_neg_users.extend([user_id] * len(unseen))
+                test_neg_items.extend(unseen)
+                
+                # Sample 1 negative for every train positive
+                neg_samples = np.random.choice(unseen, size=len(train_pos), replace=True)
+                train_neg_users.extend([user_id] * len(train_pos))
+                train_neg_items.extend(neg_samples)
+                
+        # 1. Build Train Data (Positives + Negatives)
+        all_train_users = np.concatenate([train_pos_users, train_neg_users])
+        all_train_items = np.concatenate([train_pos_items, train_neg_items])
+        all_train_labels = np.concatenate([np.ones(len(train_pos_users)), np.zeros(len(train_neg_users))])
+        
+        X_user_train = user_df.loc[all_train_users].values
+        X_item_train = item_df.loc[all_train_items].values
+        y_train = np.column_stack((all_train_users, all_train_items, all_train_labels))
+        
+        # 2. Build Test Data (1 Positive + Unseen Negatives per user)
+        all_test_users = np.concatenate([test_pos_users, test_neg_users])
+        all_test_items = np.concatenate([test_pos_items, test_neg_items])
+        all_test_labels = np.concatenate([np.ones(len(test_pos_users)), np.zeros(len(test_neg_users))])
+        
+        X_user_test = user_df.loc[all_test_users].values
+        X_item_test = item_df.loc[all_test_items].values
+        y_test = np.column_stack((all_test_users, all_test_items, all_test_labels))
 
         return (
             (X_user_train, X_item_train, y_train),
-            (X_user_val, X_item_val, y_val),
+            (X_user_test, X_item_test, y_test),
             (X_user_test, X_item_test, y_test)
         )
 

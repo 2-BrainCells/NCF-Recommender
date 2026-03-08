@@ -171,7 +171,7 @@ def run_user_comparison(rec_system: DyslexiaRecommendationSystem, user_ids: list
         except Exception as e:
             print(f" Error for user {user_id}: {str(e)}")
 
-def analyze_system_performance(training_results: dict, hpo_results: dict = None):
+def analyze_system_performance(training_results: dict, hpo_results: dict | None = None):
     """Comprehensive analysis of recommendation system performance metrics and optimization results."""
     print(f"\nSystem Performance Analysis:")
     print("=" * 50)
