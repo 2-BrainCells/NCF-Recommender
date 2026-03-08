@@ -596,7 +596,6 @@ def main():
                     # Form ends here
                     submitted = st.form_submit_button("🎯 Get Recommendations", type="primary")
                 
-                # --- THIS BLOCK MUST BE OUTSIDE THE FORM ---
                 if submitted:
                     user_profile = {
                         'id': user_id,

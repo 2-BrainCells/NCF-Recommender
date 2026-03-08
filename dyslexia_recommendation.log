@@ -715,3 +715,78 @@
 2026-03-08 17:05:12,963 - recommendation_system - INFO - User 400: 13 high-rated items out of 29 total
 2026-03-08 17:05:12,965 - recommendation_system - INFO - User 400 preferred categories: [('Self-made Study Aids', np.float64(6.5)), ('Text Structuring Tools', np.float64(6.0)), ('Active Reading Markup', np.float64(6.0)), ('Assistive Writing Tools', np.float64(5.5)), ('Personal Reader Support', np.float64(5.5))]
 2026-03-08 17:05:13,553 - recommendation_system - INFO - User 400: Found 10 similar users
+2026-03-08 17:09:15,942 - recommendation_system - INFO - Loading data files...
+2026-03-08 17:09:15,997 - data_processor - INFO - Starting data preprocessing...
+2026-03-08 17:09:16,000 - data_processor - INFO - Created item data: 39 items
+2026-03-08 17:09:16,069 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-03-08 17:09:16,076 - data_processor - WARNING - Ablation: P1-P12 Learning Difficulty features DISABLED. Using pure demographics.
+2026-03-08 17:09:16,085 - data_processor - INFO - Created user data: 1216 users
+2026-03-08 17:09:16,453 - data_processor - INFO - Final data shapes - Users: (40034, 81), Items: (40034, 27), Ratings: (40034, 3)
+2026-03-08 17:09:16,455 - recommendation_system - INFO - Data loaded successfully: 40034 users, 40034 items, 40034 ratings
+2026-03-08 17:09:16,457 - recommendation_system - INFO - Starting model training...
+2026-03-08 17:09:16,457 - data_processor - INFO - Generating Leave-One-Out (LOO) splits & Negative Samples...
+2026-03-08 17:10:26,213 - recommendation_system - INFO - Generating Multi-K Evaluation Table...
+2026-03-08 17:10:30,487 - recommendation_system - INFO - Model and data saved to dyslexia_model.pth
+2026-03-08 17:10:30,487 - recommendation_system - INFO - User 7000 - Existing: False
+2026-03-08 17:10:30,609 - recommendation_system - INFO - User 8000 - Existing: False
+2026-03-08 17:10:30,699 - recommendation_system - INFO - User 400 - Existing: True
+2026-03-08 17:10:30,702 - recommendation_system - INFO - User 400: 13 high-rated items out of 29 total
+2026-03-08 17:10:30,704 - recommendation_system - INFO - User 400 preferred categories: [('Self-made Study Aids', np.float64(6.5)), ('Text Structuring Tools', np.float64(6.0)), ('Active Reading Markup', np.float64(6.0)), ('Assistive Writing Tools', np.float64(5.5)), ('Personal Reader Support', np.float64(5.5))]
+2026-03-08 17:10:31,299 - recommendation_system - INFO - User 400: Found 10 similar users
+2026-03-08 17:18:07,123 - recommendation_system - INFO - Loading data files...
+2026-03-08 17:18:07,237 - data_processor - INFO - Starting data preprocessing...
+2026-03-08 17:18:07,237 - data_processor - INFO - Created item data: 39 items
+2026-03-08 17:18:07,319 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-03-08 17:18:07,325 - data_processor - WARNING - Ablation: P1-P12 Learning Difficulty features DISABLED. Using pure demographics.
+2026-03-08 17:18:07,336 - data_processor - INFO - Created user data: 1216 users
+2026-03-08 17:18:07,802 - data_processor - INFO - Final data shapes - Users: (40034, 81), Items: (40034, 27), Ratings: (40034, 3)
+2026-03-08 17:18:07,810 - recommendation_system - INFO - Data loaded successfully: 40034 users, 40034 items, 40034 ratings
+2026-03-08 17:18:18,658 - data_processor - INFO - Generating Leave-One-Out (LOO) splits & Negative Samples...
+2026-03-08 17:20:11,830 - recommendation_system - INFO - Model and data saved to complete_dyslexia_model.pth
+2026-03-08 17:20:51,508 - recommendation_system - INFO - User 7000 - Existing: False
+2026-03-08 17:21:37,469 - recommendation_system - INFO - User 0 - Existing: True
+2026-03-08 17:21:37,475 - recommendation_system - INFO - User 0: 12 high-rated items out of 23 total
+2026-03-08 17:21:37,478 - recommendation_system - INFO - User 0 preferred categories: [('Multimedia Lesson Recording', np.float64(6.0)), ('Classroom Support Aids', np.float64(6.0)), ('Tutoring Support', np.float64(5.5)), ('Peer Association', np.float64(5.5)), ('Online Lessons', np.float64(5.5))]
+2026-03-08 17:21:38,359 - recommendation_system - INFO - User 0: Found 10 similar users
+2026-03-08 17:22:12,236 - recommendation_system - INFO - User 0 - Existing: True
+2026-03-08 17:22:12,241 - recommendation_system - INFO - User 0: 12 high-rated items out of 23 total
+2026-03-08 17:22:12,246 - recommendation_system - INFO - User 0 preferred categories: [('Multimedia Lesson Recording', np.float64(6.0)), ('Classroom Support Aids', np.float64(6.0)), ('Tutoring Support', np.float64(5.5)), ('Peer Association', np.float64(5.5)), ('Online Lessons', np.float64(5.5))]
+2026-03-08 17:22:13,152 - recommendation_system - INFO - User 0: Found 10 similar users
+2026-03-08 17:22:20,610 - recommendation_system - INFO - User 0 - Existing: True
+2026-03-08 17:22:20,619 - recommendation_system - INFO - User 0: 12 high-rated items out of 23 total
+2026-03-08 17:22:20,621 - recommendation_system - INFO - User 0 preferred categories: [('Multimedia Lesson Recording', np.float64(6.0)), ('Classroom Support Aids', np.float64(6.0)), ('Tutoring Support', np.float64(5.5)), ('Peer Association', np.float64(5.5)), ('Online Lessons', np.float64(5.5))]
+2026-03-08 17:22:21,541 - recommendation_system - INFO - User 0: Found 10 similar users
+2026-03-08 17:23:19,124 - recommendation_system - INFO - Loading data files...
+2026-03-08 17:23:19,255 - data_processor - INFO - Starting data preprocessing...
+2026-03-08 17:23:19,259 - data_processor - INFO - Created item data: 39 items
+2026-03-08 17:23:19,356 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-03-08 17:23:19,368 - data_processor - WARNING - Ablation: P1-P12 Learning Difficulty features DISABLED. Using pure demographics.
+2026-03-08 17:23:19,373 - data_processor - INFO - Created user data: 1216 users
+2026-03-08 17:23:19,932 - data_processor - INFO - Final data shapes - Users: (40034, 81), Items: (40034, 27), Ratings: (40034, 3)
+2026-03-08 17:23:19,932 - recommendation_system - INFO - Data loaded successfully: 40034 users, 40034 items, 40034 ratings
+2026-03-08 17:23:26,902 - data_processor - INFO - Generating Leave-One-Out (LOO) splits & Negative Samples...
+2026-03-08 17:25:57,374 - recommendation_system - INFO - Loading data files...
+2026-03-08 17:25:57,480 - data_processor - INFO - Starting data preprocessing...
+2026-03-08 17:25:57,480 - data_processor - INFO - Created item data: 39 items
+2026-03-08 17:25:57,553 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-03-08 17:25:57,566 - data_processor - INFO - Ablation: P1-P12 Learning Difficulty features ENABLED.
+2026-03-08 17:25:57,569 - data_processor - INFO - Created user data: 1216 users
+2026-03-08 17:25:57,989 - data_processor - INFO - Final data shapes - Users: (40034, 93), Items: (40034, 27), Ratings: (40034, 3)
+2026-03-08 17:25:57,989 - recommendation_system - INFO - Data loaded successfully: 40034 users, 40034 items, 40034 ratings
+2026-03-08 17:26:01,658 - data_processor - INFO - Generating Leave-One-Out (LOO) splits & Negative Samples...
+2026-03-08 17:27:52,581 - recommendation_system - INFO - Model and data saved to complete_dyslexia_model.pth
+2026-03-08 17:28:06,457 - recommendation_system - INFO - User 0 - Existing: True
+2026-03-08 17:28:06,461 - recommendation_system - INFO - User 0: 12 high-rated items out of 23 total
+2026-03-08 17:28:06,469 - recommendation_system - INFO - User 0 preferred categories: [('Multimedia Lesson Recording', np.float64(6.0)), ('Classroom Support Aids', np.float64(6.0)), ('Tutoring Support', np.float64(5.5)), ('Peer Association', np.float64(5.5)), ('Online Lessons', np.float64(5.5))]
+2026-03-08 17:28:07,304 - recommendation_system - INFO - User 0: Found 10 similar users
+2026-03-08 17:28:20,327 - recommendation_system - INFO - User 7000 - Existing: False
+2026-03-08 17:30:15,691 - recommendation_system - INFO - Loading data files...
+2026-03-08 17:30:15,793 - data_processor - INFO - Starting data preprocessing...
+2026-03-08 17:30:15,793 - data_processor - INFO - Created item data: 39 items
+2026-03-08 17:30:15,877 - data_processor - INFO - Created ratings data: 40034 ratings
+2026-03-08 17:30:15,881 - data_processor - INFO - Ablation: P1-P12 Learning Difficulty features ENABLED.
+2026-03-08 17:30:15,889 - data_processor - INFO - Created user data: 1216 users
+2026-03-08 17:30:16,335 - data_processor - INFO - Final data shapes - Users: (40034, 93), Items: (40034, 27), Ratings: (40034, 3)
+2026-03-08 17:30:16,337 - recommendation_system - INFO - Data loaded successfully: 40034 users, 40034 items, 40034 ratings
+2026-03-08 17:30:26,304 - data_processor - INFO - Generating Leave-One-Out (LOO) splits & Negative Samples...
+2026-03-08 17:31:40,868 - recommendation_system - INFO - Model and data saved to complete_dyslexia_model.pth

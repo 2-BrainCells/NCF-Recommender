@@ -12,7 +12,7 @@ SYSTEM_CONFIG = {
     'batch_size': 64,             
     'epochs': 20,
     'validation_split': 0.2,
-    'use_p_features': False,          # ABLATION SWITCH: Set to False to disable P1-P12 features
+    'use_p_features': True,          # ABLATION SWITCH: Set to False to disable P1-P12 features
     'early_stopping_patience': 3,
     'top_k_metrics': 5,      # Calculate HitRate/NDCG at this K
     'hit_threshold': 0.5,     # >0.5 probability is considered a hit (BCE Loss)
