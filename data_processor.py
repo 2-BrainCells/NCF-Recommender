@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from typing import Tuple, Dict
 import logging
 import tqdm
-from config import CATEGORY_MAPPING, DATA_CONFIG
+from config import CATEGORY_MAPPING, SYSTEM_CONFIG, DATA_CONFIG
 
 class DataProcessor:
     """Comprehensive data preprocessing pipeline for dyslexia recommendation system handling user demographics, item catalogs, and rating matrices."""
@@ -74,7 +74,7 @@ class DataProcessor:
         return ratings_data
 
     def create_user_data(self, demographic_df: pd.DataFrame, ratings_df: pd.DataFrame) -> pd.DataFrame:
-        """Transform demographics and P1-P12 learning difficulties into structured user profiles."""
+        """Transform demographics and conditional P1-P12 learning difficulties into structured user profiles."""
         # 1. Process standard demographics
         birth_year_mode = demographic_df['Anno di nascita'].mode()[0]
         demographic_df['Anno di nascita'] = demographic_df['Anno di nascita'].fillna(birth_year_mode)
@@ -102,19 +102,19 @@ class DataProcessor:
         
         user_data.reset_index(drop=True, inplace=True)
 
-        # 2. CRITICAL FIX 2: Extract P1-P12 Learning Difficulties
-        # Align rows by skipping the first row of ratings_df
-        p_features = ratings_df.iloc[1:, :12].copy()
-        
-        # Convert to numeric, replace non-numeric with NaN, fill with 0 (assuming 0 = no reported difficulty)
-        p_features = p_features.apply(pd.to_numeric, errors='coerce').fillna(0)
-        p_features.reset_index(drop=True, inplace=True)
-        
-        # Prefix columns to easily identify them as learning difficulty metrics
-        p_features.columns = [f"learning_diff_{col}" for col in p_features.columns]
+        # 2. ABLATION STUDY SWITCH: Only extract P1-P12 if enabled in config
+        if SYSTEM_CONFIG.get('use_p_features', True):
+            self.logger.info("Ablation: P1-P12 Learning Difficulty features ENABLED.")
+            p_features = ratings_df.iloc[1:, :12].copy()
+            p_features = p_features.apply(pd.to_numeric, errors='coerce').fillna(0)
+            p_features.reset_index(drop=True, inplace=True)
+            p_features.columns = [f"learning_diff_{col}" for col in p_features.columns]
+            
+            user_data = pd.concat([user_data, p_features], axis=1)
+        else:
+            self.logger.warning("Ablation: P1-P12 Learning Difficulty features DISABLED. Using pure demographics.")
 
-        # 3. Concatenate Demographics + P1-P12
-        user_data = pd.concat([user_data, p_features], axis=1)
+        # 3. Finalize User ID
         user_data.insert(0, 'user_id', user_data.index)
 
         self.diagnosis_categories = sorted(user_data['diagnosis_timing'].astype(str).unique())
