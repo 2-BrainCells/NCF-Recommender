@@ -4,4 +4,4 @@
 # Ignore PyTorch model files  
 *.pth
 
-values.csv
+*.csv
